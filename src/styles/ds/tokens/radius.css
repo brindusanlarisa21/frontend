@@ -1,0 +1,14 @@
+/* ============================================================
+   TripSplit — Radius tokens
+   Friendly, rounded — soft but not bubbly
+   ============================================================ */
+
+:root {
+  --r-xs:   6px;    /* chips inner, tiny tags */
+  --r-sm:   8px;    /* small controls, list thumbnails */
+  --r-md:   12px;   /* buttons, inputs, selects */
+  --r-lg:   16px;   /* cards (default) */
+  --r-xl:   20px;   /* feature / hero cards */
+  --r-2xl:  28px;   /* sheets, large glass panels */
+  --r-pill: 999px;  /* pills, avatars, segmented controls */
+}

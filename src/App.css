@@ -182,3 +182,59 @@
     border-right-color: var(--border);
   }
 }
+
+
+.auth-page {
+  max-width: 360px;
+  margin: 64px auto;
+  padding: 0 16px;
+  text-align: left;
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  label {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  input {
+    padding: 8px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    font-size: 16px;
+  }
+
+  button[type='submit'] {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    border: 2px solid transparent;
+    color: var(--accent);
+    background: var(--accent-bg);
+    font-size: 16px;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--accent-border);
+    }
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.auth-error {
+  color: #d33;
+  font-size: 14px;
+}
+
+.auth-message {
+  color: #2a7a2a;
+  font-size: 14px;
+}

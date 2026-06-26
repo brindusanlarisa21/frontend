@@ -1,0 +1,156 @@
+/* ============================================================
+   TripSplit — Color tokens
+   Minimalist base (clean neutrals) + Fluent accents (vivid blue→cyan→amber)
+   ============================================================ */
+
+:root {
+  /* ---- Brand ramps ---- */
+  /* Primary — Trust Blue (Airbnb-confidence meets travel-sky) */
+  --blue-50:  #EFF4FF;
+  --blue-100: #DBE6FE;
+  --blue-200: #BFD2FE;
+  --blue-300: #93B4FD;
+  --blue-400: #608DFA;
+  --blue-500: #3B6BF5;
+  --blue-600: #2563EB;   /* primary */
+  --blue-700: #1D4FD0;
+  --blue-800: #1E43A8;
+  --blue-900: #1E3A85;
+
+  /* Secondary — Lagoon Cyan (water, sky, travel) */
+  --cyan-50:  #ECFEFF;
+  --cyan-100: #CFFAFE;
+  --cyan-200: #A5F0FB;
+  --cyan-300: #67E2F4;
+  --cyan-400: #22CCE5;
+  --cyan-500: #06B6D4;   /* secondary */
+  --cyan-600: #0894B3;
+  --cyan-700: #0E7490;
+  --cyan-800: #155E75;
+  --cyan-900: #164E63;
+
+  /* Tertiary — Sun Amber (money, fun, warmth) */
+  --amber-50:  #FFFBEB;
+  --amber-100: #FEF3C7;
+  --amber-200: #FDE68A;
+  --amber-300: #FCD34D;
+  --amber-400: #FBBF24;
+  --amber-500: #F59E0B;   /* tertiary */
+  --amber-600: #D97706;
+  --amber-700: #B45309;
+
+  /* ---- Neutrals — cool slate, near-black text ---- */
+  --slate-0:   #FFFFFF;
+  --slate-25:  #FBFCFE;
+  --slate-50:  #F7F8FA;
+  --slate-100: #EEF1F5;
+  --slate-150: #E4E8EF;
+  --slate-200: #D7DCE5;
+  --slate-300: #BCC4D0;
+  --slate-400: #97A1B0;
+  --slate-500: #6B7585;
+  --slate-600: #4D5563;
+  --slate-700: #363D49;
+  --slate-800: #232936;
+  --slate-900: #141821;
+  --slate-950: #0B0E14;
+
+  /* ---- Semantic status ---- */
+  --green-50:  #ECFDF5;
+  --green-100: #D1FAE5;
+  --green-500: #10B981;   /* settled / owed-to-you */
+  --green-600: #059669;
+  --green-700: #047857;
+
+  --red-50:   #FEF2F2;
+  --red-100:  #FEE2E2;
+  --red-500:  #EF4444;    /* you-owe / destructive */
+  --red-600:  #DC2626;
+  --red-700:  #B91C1C;
+
+  --violet-400: #A78BFA;
+  --violet-500: #8B5CF6;  /* used in fluent gradients only */
+  --violet-600: #7C3AED;
+
+  /* ============================================================
+     SEMANTIC ALIASES — use these in product, not raw ramps
+     ============================================================ */
+
+  /* Text */
+  --text-strong:   var(--slate-900);
+  --text-body:     var(--slate-700);
+  --text-muted:    var(--slate-500);
+  --text-subtle:   var(--slate-400);
+  --text-onbrand:  #FFFFFF;
+  --text-link:     var(--blue-600);
+
+  /* Surfaces (minimalist base) */
+  --surface-canvas:   var(--slate-50);   /* app background */
+  --surface-card:     var(--slate-0);    /* default card */
+  --surface-raised:   var(--slate-0);
+  --surface-sunken:   var(--slate-100);  /* wells, inputs idle */
+  --surface-inverse:  var(--slate-900);
+
+  /* Borders / dividers (hairline) */
+  --border-subtle:  rgba(20, 24, 33, 0.06);
+  --border-default: rgba(20, 24, 33, 0.10);
+  --border-strong:  rgba(20, 24, 33, 0.16);
+  --border-onglass: rgba(255, 255, 255, 0.28);
+
+  /* Brand semantic */
+  --brand:          var(--blue-600);
+  --brand-hover:    var(--blue-700);
+  --brand-active:   var(--blue-800);
+  --brand-soft:     var(--blue-50);
+  --brand-soft-fg:  var(--blue-700);
+  --accent:         var(--cyan-500);
+  --accent-soft:    var(--cyan-50);
+  --highlight:      var(--amber-500);
+  --highlight-soft: var(--amber-50);
+
+  /* Money semantics */
+  --owe:        var(--red-500);     /* you owe */
+  --owe-soft:   var(--red-50);
+  --owed:       var(--green-600);   /* you are owed */
+  --owed-soft:  var(--green-50);
+  --settled:    var(--slate-400);
+
+  /* Status */
+  --success:    var(--green-500);
+  --success-soft: var(--green-50);
+  --danger:     var(--red-500);
+  --danger-soft: var(--red-50);
+  --warning:    var(--amber-500);
+  --warning-soft: var(--amber-50);
+  --info:       var(--blue-600);
+  --info-soft:  var(--blue-50);
+
+  /* Focus ring */
+  --ring: 0 0 0 3px rgba(37, 99, 235, 0.35);
+
+  /* ============================================================
+     FLUENT layer — acrylic / gradient material
+     Used ONLY on hero moments (trip covers, balance hero, primary
+     CTA, active nav). Everything else stays minimalist white.
+     ============================================================ */
+  --grad-brand:    linear-gradient(135deg, #2563EB 0%, #3B6BF5 45%, #06B6D4 100%);
+  --grad-brand-vivid: linear-gradient(135deg, #1D4FD0 0%, #2563EB 38%, #22CCE5 100%);
+  --grad-sky:      linear-gradient(160deg, #3B6BF5 0%, #06B6D4 60%, #22CCE5 100%);
+  --grad-sunset:   linear-gradient(135deg, #2563EB 0%, #8B5CF6 55%, #F59E0B 120%);
+  --grad-mesh:     radial-gradient(120% 120% at 0% 0%, #3B6BF5 0%, rgba(59,107,245,0) 55%),
+                   radial-gradient(120% 120% at 100% 0%, #06B6D4 0%, rgba(6,182,212,0) 50%),
+                   radial-gradient(140% 140% at 100% 100%, #8B5CF6 0%, rgba(139,92,246,0) 55%),
+                   linear-gradient(135deg, #1E43A8, #2563EB);
+
+  /* Acrylic glass — frosted translucent panels (over imagery/gradient) */
+  --glass-fill:        rgba(255, 255, 255, 0.14);
+  --glass-fill-strong: rgba(255, 255, 255, 0.22);
+  --glass-stroke:      rgba(255, 255, 255, 0.30);
+  --glass-blur:        18px;
+  --glass-dark-fill:   rgba(11, 14, 20, 0.36);
+  --glass-dark-stroke: rgba(255, 255, 255, 0.14);
+
+  /* Scrims for legibility of text over imagery */
+  --scrim-top:    linear-gradient(180deg, rgba(11,14,20,0.45) 0%, rgba(11,14,20,0) 60%);
+  --scrim-bottom: linear-gradient(0deg, rgba(11,14,20,0.62) 0%, rgba(11,14,20,0) 70%);
+}

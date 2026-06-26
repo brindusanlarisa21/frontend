@@ -1,0 +1,47 @@
+/* ============================================================
+   TripSplit — Base layer
+   Minimal reset + element defaults wired to tokens.
+   Scoped under .ts-root so it only affects pages that opt in
+   (keeps the rest of the app, e.g. auth pages, untouched).
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.ts-root {
+  font: var(--type-body);
+  color: var(--text-body);
+  background: var(--surface-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv05' 1, 'ss01' 1;
+}
+
+.ts-root h1, .ts-root h2, .ts-root h3, .ts-root h4, .ts-root p, .ts-root figure { margin: 0; }
+
+.ts-root h1 { font: var(--type-h1); color: var(--text-strong); letter-spacing: var(--ls-tight); }
+.ts-root h2 { font: var(--type-h2); color: var(--text-strong); letter-spacing: var(--ls-snug); }
+.ts-root h3 { font: var(--type-h3); color: var(--text-strong); letter-spacing: var(--ls-snug); }
+
+.ts-root a { color: var(--text-link); text-decoration: none; }
+
+.ts-root button { font-family: inherit; }
+
+/* Tabular figures for any monetary / numeric element */
+.ts-root .tnum, .ts-root .money { font-variant-numeric: tabular-nums; }
+
+/* Brand-styled selection */
+.ts-root ::selection { background: var(--blue-100); color: var(--blue-900); }
+
+/* Thin, unobtrusive scrollbars inside app frames */
+.ts-scroll { scrollbar-width: thin; scrollbar-color: var(--slate-200) transparent; }
+.ts-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.ts-scroll::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 999px; }
+.ts-scroll::-webkit-scrollbar-thumb:hover { background: var(--slate-300); }
+
+/* Utility: overline label */
+.ts-overline {
+  font: var(--fw-bold) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}

@@ -1,0 +1,14 @@
+/* ============================================================
+   TripSplit Design System — global entry
+   Consumers import this one file. Import order = cascade order.
+   (This file is @import lines only — see tokens/* for values.)
+   ============================================================ */
+
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/radius.css';
+@import './tokens/shadows.css';
+@import './tokens/motion.css';
+@import './tokens/base.css';

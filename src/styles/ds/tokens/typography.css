@@ -1,0 +1,49 @@
+/* ============================================================
+   TripSplit — Typography tokens
+   ============================================================ */
+
+:root {
+  /* Families */
+  --font-display: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Weights */
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+  --fw-extra:    800;
+
+  /* Type scale — mobile-first, 1.250 major-third-ish, tightened for UI */
+  --fs-display:  34px;   /* hero numbers, balance hero */
+  --fs-h1:       28px;
+  --fs-h2:       22px;
+  --fs-h3:       18px;
+  --fs-title:    16px;   /* card / row titles */
+  --fs-body:     15px;   /* default body */
+  --fs-sm:       13px;   /* secondary / meta */
+  --fs-xs:       11px;   /* labels, overlines, badges */
+
+  /* Line heights */
+  --lh-tight:   1.12;
+  --lh-snug:    1.28;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.65;
+
+  /* Letter spacing */
+  --ls-tight:   -0.02em;   /* display & large headings */
+  --ls-snug:    -0.01em;
+  --ls-normal:   0em;
+  --ls-wide:     0.04em;
+  --ls-caps:     0.08em;    /* overlines / all-caps labels */
+
+  /* Semantic roles */
+  --type-display: var(--fw-extra) var(--fs-display)/var(--lh-tight) var(--font-display);
+  --type-h1:      var(--fw-bold) var(--fs-h1)/var(--lh-tight) var(--font-display);
+  --type-h2:      var(--fw-bold) var(--fs-h2)/var(--lh-snug) var(--font-display);
+  --type-h3:      var(--fw-semibold) var(--fs-h3)/var(--lh-snug) var(--font-display);
+  --type-title:   var(--fw-semibold) var(--fs-title)/var(--lh-snug) var(--font-body);
+  --type-body:    var(--fw-regular) var(--fs-body)/var(--lh-normal) var(--font-body);
+  --type-sm:      var(--fw-regular) var(--fs-sm)/var(--lh-normal) var(--font-body);
+}
