@@ -4,9 +4,12 @@ import { useDispatch, useSelector } from 'react-redux'
 import {
   Button, IconButton, Input, Badge, Card, Avatar,
   TripCover, SegmentedControl, Icon, Chip, ActivityCard, DatePicker, ActivityMap, LocationSearch,
+  BalanceHero, ExpenseRow, SettleUpRow,
 } from '../../components/ds'
 import { fetchTripById, addTripMember, removeTripMember, clearMemberActionError } from '../../features/trips/tripsSlice'
 import { fetchActivities, createActivity, deleteActivity, clearActivityActionError } from '../../features/activities/activitiesSlice'
+import { fetchExpenses, createExpense, deleteExpense, fetchBalances, settleDebt, clearExpenseActionError } from '../../features/expenses/expensesSlice'
+import { apiRequest } from '../../api/client'
 import '../../styles/ds/index.css'
 import '../../styles/trip-detail.css'
 
@@ -313,13 +316,258 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   )
 }
 
-function Expenses() {
+const EXPENSE_CATEGORY_OPTIONS = [
+  { value: 'food', label: 'Food', icon: 'utensils' },
+  { value: 'stay', label: 'Stay', icon: 'bed' },
+  { value: 'travel', label: 'Travel', icon: 'plane' },
+  { value: 'transit', label: 'Transit', icon: 'car' },
+  { value: 'fun', label: 'Fun', icon: 'ticket' },
+  { value: 'shop', label: 'Shop', icon: 'receipt' },
+]
+
+function ExpenseForm({ onClose, onSubmit, submitting, error, members, currentUserId }) {
+  const [title, setTitle] = useState('')
+  const [amount, setAmount] = useState('')
+  const [category, setCategory] = useState('food')
+  const [paidByUserId, setPaidByUserId] = useState(currentUserId ?? members[0]?.userId ?? '')
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!title.trim() || !amount || !paidByUserId) return
+    onSubmit({
+      title: title.trim(),
+      amount: parseFloat(amount),
+      category,
+      paidByUserId,
+      splitAmong: members.map((m) => m.userId),
+    })
+  }
+
   return (
-    <ComingSoon
-      icon="wallet"
-      title="Expenses are on the way"
-      description="Splitting costs and settling up aren't connected yet."
-    />
+    <form onSubmit={handleSubmit}>
+      <div className="col g4" style={{ padding: 22 }}>
+        <Input
+          label="Title" placeholder="e.g. Dinner at La Piazza"
+          value={title} onChange={(e) => setTitle(e.target.value)} required
+        />
+        <Input
+          label="Amount" type="number" min="0.01" step="0.01" placeholder="0.00"
+          value={amount} onChange={(e) => setAmount(e.target.value)} required
+        />
+        <div>
+          <label style={{ font: "var(--fw-semibold) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-body)', display: 'block', marginBottom: 6 }}>
+            Category
+          </label>
+          <div className="flex g2 wrap-wrap">
+            {EXPENSE_CATEGORY_OPTIONS.map((c) => (
+              <Chip key={c.value} icon={c.icon} selected={category === c.value} onClick={() => setCategory(c.value)}>
+                {c.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label style={{ font: "var(--fw-semibold) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-body)', display: 'block', marginBottom: 6 }}>
+            Paid by
+          </label>
+          <select
+            value={paidByUserId}
+            onChange={(e) => setPaidByUserId(e.target.value)}
+            style={{
+              width: '100%',
+              height: 48,
+              padding: '0 14px',
+              background: 'var(--surface-card)',
+              border: '1.5px solid var(--border-default)',
+              borderRadius: 'var(--r-md)',
+              font: "var(--fw-medium) var(--fs-body)/1 'Inter', sans-serif",
+              color: 'var(--text-strong)',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            {members.map((m) => (
+              <option key={m.userId} value={m.userId}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+        {error && <p className="auth-error">{error}</p>}
+      </div>
+      <div className="flex g3" style={{ padding: '16px 22px', borderTop: '1px solid var(--border-subtle)' }}>
+        <Button type="button" variant="secondary" fullWidth onClick={onClose}>Cancel</Button>
+        <Button type="submit" fullWidth disabled={submitting}>
+          {submitting ? 'Adding…' : 'Add expense'}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function AddExpenseModal({ open, onClose, onSubmit, submitting, error, members, currentUserId }) {
+  return (
+    <div className={`overlay${open ? ' open' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="sheet">
+        <div className="flex items-center justify-between" style={{ padding: '20px 22px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <h2>Add expense</h2>
+          <IconButton icon="x" variant="ghost" label="Close" onClick={onClose} />
+        </div>
+        <ExpenseForm
+          key={open}
+          onClose={onClose}
+          onSubmit={onSubmit}
+          submitting={submitting}
+          error={error}
+          members={members}
+          currentUserId={currentUserId}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Expenses({ tripId, members, currentUserId }) {
+  const dispatch = useDispatch()
+  const { items, status, error, balances, actionStatus, actionError } = useSelector((state) => state.expenses)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [settlingKey, setSettlingKey] = useState(null)
+
+  useEffect(() => {
+    dispatch(fetchExpenses(tripId))
+    dispatch(fetchBalances(tripId))
+  }, [dispatch, tripId])
+
+  const openModal = () => {
+    dispatch(clearExpenseActionError())
+    setModalOpen(true)
+  }
+
+  const handleAdd = async (expense) => {
+    const result = await dispatch(createExpense({ tripId, expense }))
+    if (createExpense.fulfilled.match(result)) {
+      setModalOpen(false)
+      dispatch(fetchBalances(tripId))
+    }
+  }
+
+  const handleDelete = async (expenseId) => {
+    setDeletingId(expenseId)
+    const result = await dispatch(deleteExpense({ tripId, expenseId }))
+    setDeletingId(null)
+    if (deleteExpense.fulfilled.match(result)) {
+      dispatch(fetchBalances(tripId))
+    }
+  }
+
+  const handleSettle = async (fromUserId, toUserId) => {
+    const key = `${fromUserId}-${toUserId}`
+    setSettlingKey(key)
+    await dispatch(settleDebt({ tripId, fromUserId, toUserId }))
+    setSettlingKey(null)
+  }
+
+  const debts = balances?.debts ?? []
+
+  return (
+    <Fragment>
+      {balances && (
+        <BalanceHero
+          net={balances.net ?? 0}
+          youOwe={balances.youOwe ?? 0}
+          youAreOwed={balances.youAreOwed ?? 0}
+          style={{ marginBottom: 20 }}
+        />
+      )}
+
+      <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+        <h2>Expenses</h2>
+        <Button size="sm" leadingIcon="plus" onClick={openModal}>Add expense</Button>
+      </div>
+
+      {status === 'loading' && <p style={{ color: 'var(--text-muted)' }}>Loading expenses…</p>}
+      {status === 'failed' && <p className="auth-error">{error}</p>}
+
+      {status === 'succeeded' && items.length === 0 && (
+        <Card style={{ textAlign: 'center', padding: 48, marginBottom: 24 }}>
+          <div style={{
+            width: 56, height: 56, margin: '0 auto 16px', borderRadius: 'var(--r-pill)',
+            background: 'var(--brand-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--brand)',
+          }}>
+            <Icon name="wallet" size={26} />
+          </div>
+          <h2>No expenses yet</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Add the first expense to start tracking costs.</p>
+        </Card>
+      )}
+
+      {status === 'succeeded' && items.length > 0 && (
+        <Card style={{ marginBottom: 24, padding: '0 16px' }}>
+          {items.map((exp, i) => {
+            const youPaid = exp.paidByUserId === currentUserId
+            return (
+              <Fragment key={exp.id}>
+                {i > 0 && <div style={{ height: 1, background: 'var(--border-subtle)' }} />}
+                <div className="flex items-center g2">
+                  <ExpenseRow
+                    style={{ flex: 1 }}
+                    title={exp.title}
+                    category={exp.category}
+                    paidBy={exp.paidByName}
+                    total={exp.amount}
+                    currency={exp.currency ?? 'USD'}
+                    yourShare={exp.yourShare}
+                    youPaid={youPaid}
+                    settled={exp.settled}
+                  />
+                  {youPaid && (
+                    <IconButton
+                      icon="x" variant="ghost" size="sm" label="Delete expense"
+                      disabled={deletingId === exp.id}
+                      onClick={() => handleDelete(exp.id)}
+                    />
+                  )}
+                </div>
+              </Fragment>
+            )
+          })}
+        </Card>
+      )}
+
+      {debts.length > 0 && (
+        <>
+          <h2 style={{ marginBottom: 12 }}>Settle up</h2>
+          <div className="col g3">
+            {debts.map((d) => {
+              const key = `${d.fromUserId}-${d.toUserId}`
+              return (
+                <SettleUpRow
+                  key={key}
+                  from={{ name: d.fromName }}
+                  to={{ name: d.toName }}
+                  amount={d.amount}
+                  currency={d.currency ?? 'USD'}
+                  settled={d.settled}
+                  onSettle={() => handleSettle(d.fromUserId, d.toUserId)}
+                />
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {actionError && <p className="auth-error" style={{ marginTop: 12 }}>{actionError}</p>}
+
+      <AddExpenseModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleAdd}
+        submitting={actionStatus === 'loading'}
+        error={actionError}
+        members={members}
+        currentUserId={currentUserId}
+      />
+    </Fragment>
   )
 }
 
@@ -334,32 +582,139 @@ function Chat() {
 }
 
 /* ============ MEMBERS ============ */
-function InviteMemberModal({ open, onClose, onInvite, submitting, error }) {
-  const [email, setEmail] = useState('')
+function UserSearchDropdown({ existingMemberIds, onSelect }) {
+  const token = useSelector((state) => state.auth.token)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([])
+      setDropdownOpen(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const data = await apiRequest(`/users?search=${encodeURIComponent(query.trim())}`, { token })
+        const filtered = (data ?? []).filter((u) => !existingMemberIds.includes(u.id))
+        setResults(filtered)
+        setDropdownOpen(true)
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query, token])
+
+  const handleSelect = (user) => {
+    onSelect(user)
+    setQuery('')
+    setResults([])
+    setDropdownOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <Input
+        label="Search by name or email"
+        placeholder="Type to search…"
+        leadingIcon="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+        onFocus={() => { if (results.length > 0) setDropdownOpen(true) }}
+      />
+      {loading && (
+        <p style={{ font: "var(--fw-regular) var(--fs-xs)/1 'Inter', sans-serif", color: 'var(--text-muted)', marginTop: 6 }}>
+          Searching…
+        </p>
+      )}
+      {dropdownOpen && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+          marginTop: 4, background: 'var(--surface-card)',
+          border: '1.5px solid var(--border-default)', borderRadius: 'var(--r-md)',
+          boxShadow: 'var(--shadow-md)', overflow: 'hidden',
+        }}>
+          {results.length === 0 ? (
+            <div style={{ padding: '12px 14px', font: "var(--fw-regular) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-muted)' }}>
+              No users found.
+            </div>
+          ) : (
+            results.map((user) => (
+              <div
+                key={user.id}
+                onMouseDown={() => handleSelect(user)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-sunken)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
+              >
+                <Avatar name={user.name} src={user.avatarUrl} size="sm" />
+                <div>
+                  <div style={{ font: "var(--fw-semibold) var(--fs-sm)/1.2 'Inter', sans-serif", color: 'var(--text-strong)' }}>{user.name}</div>
+                  <div style={{ font: "var(--fw-regular) var(--fs-xs)/1 'Inter', sans-serif", color: 'var(--text-muted)', marginTop: 2 }}>{user.email}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InviteMemberModal({ open, onClose, onInvite, submitting, error, members }) {
+  const [selectedUser, setSelectedUser] = useState(null)
+  const existingMemberIds = members.map((m) => m.userId)
+
+  useEffect(() => {
+    if (open) setSelectedUser(null)
+  }, [open])
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onInvite(email.trim())
+    if (selectedUser) onInvite(selectedUser.email)
   }
 
   return (
     <div className={`overlay${open ? ' open' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="sheet">
         <div className="flex items-center justify-between" style={{ padding: '20px 22px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <h2>Invite a traveler</h2>
+          <h2>Add a traveler</h2>
           <IconButton icon="x" variant="ghost" label="Close" onClick={onClose} />
         </div>
         <form onSubmit={handleSubmit}>
           <div className="col g4" style={{ padding: 22 }}>
-            <Input
-              label="Email address" type="email" placeholder="friend@email.com"
-              value={email} onChange={(e) => setEmail(e.target.value)} required
+            <UserSearchDropdown
+              key={open}
+              existingMemberIds={existingMemberIds}
+              onSelect={setSelectedUser}
             />
+            {selectedUser && (
+              <div className="flex items-center g3" style={{
+                padding: '10px 14px', borderRadius: 'var(--r-md)',
+                background: 'var(--brand-soft)', border: '1.5px solid var(--brand)',
+              }}>
+                <Avatar name={selectedUser.name} src={selectedUser.avatarUrl} size="sm" />
+                <div className="grow">
+                  <div style={{ font: "var(--fw-semibold) var(--fs-sm)/1.2 'Inter', sans-serif", color: 'var(--text-strong)' }}>{selectedUser.name}</div>
+                  <div style={{ font: "var(--fw-regular) var(--fs-xs)/1 'Inter', sans-serif", color: 'var(--text-muted)', marginTop: 2 }}>{selectedUser.email}</div>
+                </div>
+                <IconButton icon="x" variant="ghost" size="sm" label="Clear" onClick={() => setSelectedUser(null)} />
+              </div>
+            )}
             {error && <p className="auth-error">{error}</p>}
           </div>
           <div className="flex g3" style={{ padding: '16px 22px', borderTop: '1px solid var(--border-subtle)' }}>
             <Button type="button" variant="secondary" fullWidth onClick={onClose}>Cancel</Button>
-            <Button type="submit" fullWidth disabled={submitting}>{submitting ? 'Inviting…' : 'Send invite'}</Button>
+            <Button type="submit" fullWidth disabled={submitting || !selectedUser}>
+              {submitting ? 'Adding…' : 'Add to trip'}
+            </Button>
           </div>
         </form>
       </div>
@@ -394,7 +749,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
     <Fragment>
       <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
         <h2>Travelers · {members.length}</h2>
-        <Button size="sm" leadingIcon="plus" onClick={openModal}>Invite</Button>
+        <Button size="sm" leadingIcon="plus" onClick={openModal}>Add member</Button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }} className="mem-grid">
         {members.map((m) => {
@@ -425,6 +780,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
       <InviteMemberModal
         open={modalOpen} onClose={() => setModalOpen(false)} onInvite={handleInvite}
         submitting={memberActionStatus === 'loading'} error={memberActionError}
+        members={members}
       />
     </Fragment>
   )
@@ -475,7 +831,9 @@ function TripDetail() {
     )
   }
 
-  const isAdmin = trip.members.find((m) => m.email === user?.email)?.role === 'Admin'
+  const currentMember = trip.members.find((m) => m.email === user?.email)
+  const isAdmin = currentMember?.role === 'Admin'
+  const currentUserId = currentMember?.userId
   const people = trip.members.map((m) => ({ name: m.name, src: m.avatarUrl }))
 
   return (
@@ -501,7 +859,9 @@ function TripDetail() {
               currentUserEmail={user?.email} isAdmin={isAdmin}
             />
           )}
-          {tab === 'expenses' && <Expenses />}
+          {tab === 'expenses' && (
+            <Expenses tripId={trip.id} members={trip.members} currentUserId={currentUserId} />
+          )}
           {tab === 'members' && (
             <Members members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin} tripId={trip.id} />
           )}
