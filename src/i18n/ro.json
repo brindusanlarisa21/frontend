@@ -1,0 +1,123 @@
+{
+  "nav": {
+    "trips": "Călătorii",
+    "itinerary": "Itinerar",
+    "expenses": "Cheltuieli",
+    "members": "Membri",
+    "chat": "Chat",
+    "ai": "✨ AI"
+  },
+  "profile": {
+    "title": "Profilul meu",
+    "name": "Nume",
+    "email": "Email",
+    "paymentLink": "Link plată (Revolut / PayPal / IBAN)",
+    "paymentLinkHint": "Ceilalți membri îl vor vedea când îți datorează bani.",
+    "language": "Limbă",
+    "save": "Salvează",
+    "saved": "Salvat!",
+    "logout": "Deconectare",
+    "logoutConfirm": "Ești sigur că vrei să te deconectezi?"
+  },
+  "trip": {
+    "upcoming": "Viitoare",
+    "active": "Activă",
+    "completed": "Finalizată",
+    "noActivities": "Nicio activitate încă.",
+    "addActivity": "Adaugă activitate",
+    "deleteActivity": "Șterge"
+  },
+  "expenses": {
+    "title": "Cheltuieli",
+    "add": "Adaugă cheltuială",
+    "edit": "Editează",
+    "delete": "Șterge",
+    "settle": "Achită",
+    "settled": "Achitat",
+    "youOwe": "Tu datorezi",
+    "youAreOwed": "Ți se datorează",
+    "net": "Sold net",
+    "paidBy": "Plătit de",
+    "splitAmong": "Împărțit între",
+    "perPerson": "per persoană",
+    "settleUp": "Achitare",
+    "noExpenses": "Nicio cheltuială încă.",
+    "youPaid": "ai plătit",
+    "youAreOwedLabel": "ți se datorează"
+  },
+  "members": {
+    "title": "Membri",
+    "add": "Adaugă membru",
+    "remove": "Elimină",
+    "admin": "Admin",
+    "member": "Membru",
+    "search": "Caută după nume sau email"
+  },
+  "chat": {
+    "placeholder": "Scrie un mesaj... (Enter pentru trimitere)",
+    "connecting": "Se conectează...",
+    "noMessages": "Niciun mesaj încă. Fii primul!",
+    "propose": "Propune activitate"
+  },
+  "proposal": {
+    "title": "Propunere activitate",
+    "proposedBy": "Propus de",
+    "approve": "Aprobă",
+    "reject": "Respinge",
+    "approved": "✓ Aprobat",
+    "rejected": "✗ Respins",
+    "voting": "Votare",
+    "outOf": "din",
+    "approve_votes": "aprobă",
+    "send": "Trimite propunerea",
+    "form": {
+      "title": "Titlu",
+      "description": "Descriere",
+      "location": "Locație",
+      "startTime": "Data/ora de început",
+      "endTime": "Data/ora de final",
+      "category": "Categorie",
+      "cost": "Cost ($)"
+    }
+  },
+  "ai": {
+    "greeting": "Bună! Sunt asistentul tău AI pentru călătoria în **{{destination}}**. 🌍\n\nTe pot ajuta cu:\n- 🏛️ Recomandări de activități și atracții\n- 🍽️ Restaurante și mâncare locală\n- 🚌 Transport și deplasare\n- 🎭 Obiceiuri locale și cultură\n- 💰 Opțiuni budget, mid-range și premium\n\nCe vrei să știi?",
+    "placeholder": "Întreabă orice despre destinație...",
+    "prompts": {
+      "activities": "Ce activități recomandați în zonă?",
+      "food": "Unde se mănâncă bine? Budget/mid/premium",
+      "customs": "Ce obiceiuri locale trebuie să știu?",
+      "transport": "Transport local — cum mă deplasez?",
+      "firstDay": "Ce să vizitez în prima zi?"
+    }
+  },
+  "auth": {
+    "login": "Autentificare",
+    "register": "Înregistrare",
+    "email": "Email",
+    "password": "Parolă",
+    "name": "Nume",
+    "forgotPassword": "Ai uitat parola?",
+    "noAccount": "Nu ai cont?",
+    "hasAccount": "Ai deja cont?"
+  },
+  "common": {
+    "save": "Salvează",
+    "cancel": "Anulează",
+    "delete": "Șterge",
+    "close": "Închide",
+    "loading": "Se încarcă...",
+    "error": "A apărut o eroare",
+    "confirm": "Confirmă",
+    "back": "Înapoi"
+  },
+  "settle": {
+    "title": "Achitare datorie",
+    "pays": "plătește",
+    "openLink": "Deschide link plată",
+    "markPaid": "Am plătit — marchează ca achitat",
+    "confirmCash": "Confirmă că {{from}} a plătit {{to}} în numerar. Datoria va fi marcată ca achitată imediat.",
+    "noLink": "{{name}} nu a setat un link de plată. Plătește prin transfer bancar, Revolut sau cash, apoi confirmă.",
+    "paymentLinkOf": "Link plată al lui {{name}}"
+  }
+}

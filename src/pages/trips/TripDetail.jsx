@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import * as signalR from '@microsoft/signalr'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Button, IconButton, Input, Badge, Card, Avatar,
@@ -8,7 +9,9 @@ import {
 } from '../../components/ds'
 import { fetchTripById, addTripMember, removeTripMember, clearMemberActionError } from '../../features/trips/tripsSlice'
 import { fetchActivities, createActivity, deleteActivity, clearActivityActionError } from '../../features/activities/activitiesSlice'
-import { fetchExpenses, createExpense, deleteExpense, fetchBalances, settleDebt, clearExpenseActionError } from '../../features/expenses/expensesSlice'
+import { fetchExpenses, createExpense, updateExpense, deleteExpense, fetchBalances, settleDebt, createSettlement, clearExpenseActionError } from '../../features/expenses/expensesSlice'
+import { fetchMessages, messageReceived, clearMessages } from '../../features/chat/chatSlice'
+import { fetchProposals, createProposal, voteProposal, proposalReceived, proposalUpdated, clearProposals } from '../../features/proposals/proposalsSlice'
 import { apiRequest } from '../../api/client'
 import '../../styles/ds/index.css'
 import '../../styles/trip-detail.css'
@@ -38,7 +41,71 @@ function Logo({ size = 26 }) {
   )
 }
 
+function ProfileModal({ open, onClose }) {
+  const { token } = useSelector((s) => s.auth)
+  const [name, setName] = useState('')
+  const [paymentLink, setPaymentLink] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setSaved(false)
+    fetch(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'}/api/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => { setName(d.name ?? ''); setPaymentLink(d.paymentLink ?? '') })
+  }, [open, token])
+
+  const handleSave = async () => {
+    setSaving(true)
+    await fetch(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'}/api/users/me`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, paymentLink }),
+    })
+    setSaving(false)
+    setSaved(true)
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: 0 }}>Profilul meu</h2>
+          <IconButton icon="x" variant="ghost" size="sm" onClick={onClose} />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Input label="Nume" value={name} onChange={(e) => setName(e.target.value)} />
+
+          <div>
+            <Input
+              label="Link de plată (Revolut / PayPal / IBAN)"
+              placeholder="https://revolut.me/username"
+              value={paymentLink}
+              onChange={(e) => setPaymentLink(e.target.value)}
+            />
+            <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>
+              Ceilalți membri îl vor vedea când îți datorează bani.
+            </p>
+          </div>
+
+          <Button variant="primary" loading={saving} onClick={handleSave} style={{ width: '100%' }}>
+            {saved ? 'Salvat!' : 'Salvează'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TopBar({ tripTitle, user }) {
+  const navigate = useNavigate()
+
   return (
     <header className="topbar">
       <div className="app-wrap app-wrap-wide flex items-center g4" style={{ height: '100%' }}>
@@ -49,7 +116,12 @@ function TopBar({ tripTitle, user }) {
           {tripTitle && <b style={{ color: 'var(--text-strong)', fontWeight: 'var(--fw-bold)' }}>{tripTitle}</b>}
         </div>
         <div className="grow" />
-        <Avatar name={user?.name || user?.email || '?'} size="md" ring />
+        <button
+          onClick={() => navigate('/profile')}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}
+        >
+          <Avatar name={user?.name || user?.email || '?'} size="md" ring />
+        </button>
       </div>
     </header>
   )
@@ -325,11 +397,38 @@ const EXPENSE_CATEGORY_OPTIONS = [
   { value: 'shop', label: 'Shop', icon: 'receipt' },
 ]
 
-function ExpenseForm({ onClose, onSubmit, submitting, error, members, currentUserId }) {
-  const [title, setTitle] = useState('')
-  const [amount, setAmount] = useState('')
-  const [category, setCategory] = useState('food')
-  const [paidByUserId, setPaidByUserId] = useState(currentUserId ?? members[0]?.userId ?? '')
+const selectStyle = {
+  width: '100%', height: 48, padding: '0 14px',
+  background: 'var(--surface-card)', border: '1.5px solid var(--border-default)',
+  borderRadius: 'var(--r-md)', font: "var(--fw-medium) var(--fs-body)/1 'Inter', sans-serif",
+  color: 'var(--text-strong)', outline: 'none', cursor: 'pointer',
+}
+
+function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial }) {
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
+  const [category, setCategory] = useState(initial?.category ?? 'food')
+  const [paidByUserId, setPaidByUserId] = useState(
+    initial?.paidByUserId != null ? String(initial.paidByUserId) : String(members[0]?.userId ?? '')
+  )
+  const [splitAmong, setSplitAmong] = useState(
+    () => new Set(
+      initial?.splitAmong
+        ? initial.splitAmong.map(String)
+        : members.map((m) => String(m.userId))
+    )
+  )
+
+  const toggleMember = (uid) => {
+    setSplitAmong((prev) => {
+      const next = new Set(prev)
+      if (next.has(uid)) { if (next.size > 1) next.delete(uid) }
+      else next.add(uid)
+      return next
+    })
+  }
+
+  const isEdit = Boolean(initial?.id)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -338,10 +437,15 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, currentUse
       title: title.trim(),
       amount: parseFloat(amount),
       category,
-      paidByUserId,
-      splitAmong: members.map((m) => m.userId),
+      paidByUserId: parseInt(paidByUserId, 10),
+      splitAmong: [...splitAmong].map(Number),
     })
   }
+
+  const splitCount = splitAmong.size
+  const perPerson = amount && splitCount > 0
+    ? (parseFloat(amount) / splitCount).toFixed(2)
+    : null
 
   return (
     <form onSubmit={handleSubmit}>
@@ -370,82 +474,219 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, currentUse
           <label style={{ font: "var(--fw-semibold) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-body)', display: 'block', marginBottom: 6 }}>
             Paid by
           </label>
-          <select
-            value={paidByUserId}
-            onChange={(e) => setPaidByUserId(e.target.value)}
-            style={{
-              width: '100%',
-              height: 48,
-              padding: '0 14px',
-              background: 'var(--surface-card)',
-              border: '1.5px solid var(--border-default)',
-              borderRadius: 'var(--r-md)',
-              font: "var(--fw-medium) var(--fs-body)/1 'Inter', sans-serif",
-              color: 'var(--text-strong)',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
+          <select value={paidByUserId} onChange={(e) => setPaidByUserId(e.target.value)} style={selectStyle}>
             {members.map((m) => (
               <option key={m.userId} value={m.userId}>{m.name}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <label style={{ font: "var(--fw-semibold) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-body)' }}>
+              Split between
+            </label>
+            {perPerson && (
+              <span style={{ font: "var(--fw-medium) var(--fs-xs)/1 'Inter', sans-serif", color: 'var(--text-muted)' }}>
+                ${perPerson} each
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {members.map((m) => {
+              const uid = String(m.userId)
+              const checked = splitAmong.has(uid)
+              return (
+                <label
+                  key={uid}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', borderRadius: 'var(--r-md)', cursor: 'pointer',
+                    border: `1.5px solid ${checked ? 'var(--brand)' : 'var(--border-default)'}`,
+                    background: checked ? 'var(--brand-soft)' : 'var(--surface-card)',
+                    transition: 'all .12s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleMember(uid)}
+                    style={{ accentColor: 'var(--brand)', width: 16, height: 16, flexShrink: 0 }}
+                  />
+                  <Avatar name={m.name} src={m.avatarUrl} size="sm" />
+                  <span style={{ font: "var(--fw-medium) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-strong)', flex: 1 }}>
+                    {m.name}
+                  </span>
+                  {checked && perPerson && (
+                    <span style={{ font: "var(--fw-semibold) var(--fs-xs)/1 'Inter', sans-serif", color: 'var(--brand)' }}>
+                      ${perPerson}
+                    </span>
+                  )}
+                </label>
+              )
+            })}
+          </div>
         </div>
         {error && <p className="auth-error">{error}</p>}
       </div>
       <div className="flex g3" style={{ padding: '16px 22px', borderTop: '1px solid var(--border-subtle)' }}>
         <Button type="button" variant="secondary" fullWidth onClick={onClose}>Cancel</Button>
         <Button type="submit" fullWidth disabled={submitting}>
-          {submitting ? 'Adding…' : 'Add expense'}
+          {submitting ? (isEdit ? 'Saving…' : 'Adding…') : (isEdit ? 'Save changes' : 'Add expense')}
         </Button>
       </div>
     </form>
   )
 }
 
-function AddExpenseModal({ open, onClose, onSubmit, submitting, error, members, currentUserId }) {
+function ExpenseModal({ open, onClose, onSubmit, submitting, error, members, initial }) {
+  const isEdit = Boolean(initial?.id)
   return (
     <div className={`overlay${open ? ' open' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="sheet">
         <div className="flex items-center justify-between" style={{ padding: '20px 22px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <h2>Add expense</h2>
+          <h2>{isEdit ? 'Edit expense' : 'Add expense'}</h2>
           <IconButton icon="x" variant="ghost" label="Close" onClick={onClose} />
         </div>
         <ExpenseForm
-          key={open}
+          key={open ? (initial?.id ?? 'new') : 'closed'}
           onClose={onClose}
           onSubmit={onSubmit}
           submitting={submitting}
           error={error}
           members={members}
-          currentUserId={currentUserId}
+          initial={initial}
         />
       </div>
     </div>
   )
 }
 
-function Expenses({ tripId, members, currentUserId }) {
+function SettleModal({ open, debt, submitting, error, onClose, onSettle }) {
+  if (!open || !debt) return null
+
+  const hasLink = !!debt.toPaymentLink
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: 0 }}>Settle up</h2>
+          <IconButton icon="x" variant="ghost" size="sm" onClick={onClose} />
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+            <Avatar name={debt.fromName} size="md" />
+            <Icon name="arrowRight" size={18} color="var(--text-subtle)" />
+            <Avatar name={debt.toName} size="md" />
+          </div>
+          <p style={{ margin: '0 0 4px', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)' }}>
+            <b style={{ color: 'var(--text-strong)' }}>{debt.fromName}</b> plătește{' '}
+            <b style={{ color: 'var(--text-strong)' }}>{debt.toName}</b>
+          </p>
+          <p style={{ margin: 0, fontSize: 'var(--fs-xl)', fontWeight: 'var(--fw-bold)', color: 'var(--text-strong)' }}>
+            {debt.currency} {Number(debt.amount).toFixed(2)}
+          </p>
+        </div>
+
+        {hasLink ? (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              padding: 12, borderRadius: 'var(--r-md)', background: 'var(--surface-raised)',
+              border: '1px solid var(--border-subtle)', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <Icon name="creditCard" size={18} color="var(--brand)" />
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>Link de plată {debt.toName}</p>
+                <p style={{ margin: 0, fontSize: 'var(--fs-sm)', color: 'var(--text-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {debt.toPaymentLink}
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button
+                variant="primary"
+                style={{ width: '100%' }}
+                onClick={() => window.open(debt.toPaymentLink, '_blank', 'noopener,noreferrer')}
+              >
+                Deschide link de plată
+              </Button>
+              <Button
+                variant="secondary"
+                style={{ width: '100%' }}
+                loading={submitting}
+                onClick={() => onSettle()}
+              >
+                Am plătit — marchează ca settled
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              padding: 12, borderRadius: 'var(--r-md)', background: 'var(--surface-raised)',
+              border: '1px solid var(--border-subtle)', marginBottom: 16,
+              display: 'flex', gap: 10, alignItems: 'flex-start',
+            }}>
+              <Icon name="info" size={16} color="var(--text-muted)" style={{ marginTop: 2, flexShrink: 0 }} />
+              <p style={{ margin: 0, fontSize: 'var(--fs-sm)', color: 'var(--text-muted)' }}>
+                <b>{debt.toName}</b> nu a setat un link de plată. Plătește prin bancă, Revolut sau cash, apoi confirmă.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              style={{ width: '100%' }}
+              loading={submitting}
+              onClick={() => onSettle()}
+            >
+              Am plătit — marchează ca settled
+            </Button>
+          </div>
+        )}
+
+        {error && <p className="auth-error" style={{ marginTop: 8 }}>{error}</p>}
+      </div>
+    </div>
+  )
+}
+
+function Expenses({ tripId, members, currentUserId, isAdmin }) {
   const dispatch = useDispatch()
   const { items, status, error, balances, actionStatus, actionError } = useSelector((state) => state.expenses)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [modal, setModal] = useState(null) // null | { mode: 'add' } | { mode: 'edit', expense }
   const [deletingId, setDeletingId] = useState(null)
-  const [settlingKey, setSettlingKey] = useState(null)
+  const [settleModal, setSettleModal] = useState(null) // null | { fromUserId, toUserId, fromName, toName, amount, currency }
 
   useEffect(() => {
     dispatch(fetchExpenses(tripId))
     dispatch(fetchBalances(tripId))
   }, [dispatch, tripId])
 
-  const openModal = () => {
+  const openAdd = () => {
     dispatch(clearExpenseActionError())
-    setModalOpen(true)
+    setModal({ mode: 'add' })
+  }
+
+  const openEdit = (exp) => {
+    dispatch(clearExpenseActionError())
+    // Build splitAmong from splits stored on expense, fall back to all members
+    setModal({ mode: 'edit', expense: exp })
   }
 
   const handleAdd = async (expense) => {
     const result = await dispatch(createExpense({ tripId, expense }))
     if (createExpense.fulfilled.match(result)) {
-      setModalOpen(false)
+      setModal(null)
+      dispatch(fetchBalances(tripId))
+    }
+  }
+
+  const handleEdit = async (updates) => {
+    const expenseId = modal.expense.id
+    const result = await dispatch(updateExpense({ tripId, expenseId, updates }))
+    if (updateExpense.fulfilled.match(result)) {
+      setModal(null)
       dispatch(fetchBalances(tripId))
     }
   }
@@ -454,19 +695,49 @@ function Expenses({ tripId, members, currentUserId }) {
     setDeletingId(expenseId)
     const result = await dispatch(deleteExpense({ tripId, expenseId }))
     setDeletingId(null)
-    if (deleteExpense.fulfilled.match(result)) {
+    if (deleteExpense.fulfilled.match(result)) dispatch(fetchBalances(tripId))
+  }
+
+  const openSettleModal = (d) => {
+    dispatch(clearExpenseActionError())
+    setSettleModal({
+      fromUserId: d.fromUserId, toUserId: d.toUserId,
+      fromName: d.fromName, toName: d.toName,
+      amount: d.amount, currency: d.currency ?? 'USD',
+      toPaymentLink: d.toPaymentLink ?? null,
+    })
+  }
+
+  const handleSettle = async () => {
+    if (!settleModal) return
+    const result = await dispatch(createSettlement({
+      tripId,
+      fromUserId: settleModal.fromUserId,
+      toUserId: settleModal.toUserId,
+      amount: settleModal.amount,
+      method: 'Cash',
+    }))
+    if (createSettlement.fulfilled.match(result)) {
+      setSettleModal(null)
+      dispatch(fetchExpenses(tripId))
       dispatch(fetchBalances(tripId))
     }
   }
 
-  const handleSettle = async (fromUserId, toUserId) => {
-    const key = `${fromUserId}-${toUserId}`
-    setSettlingKey(key)
-    await dispatch(settleDebt({ tripId, fromUserId, toUserId }))
-    setSettlingKey(null)
-  }
-
   const debts = balances?.debts ?? []
+  const modalOpen = modal !== null
+  const isEditMode = modal?.mode === 'edit'
+
+  // Build initial values for edit modal
+  const editInitial = isEditMode ? {
+    id: modal.expense.id,
+    title: modal.expense.title,
+    amount: modal.expense.amount,
+    category: modal.expense.category,
+    paidByUserId: modal.expense.paidByUserId,
+    // We don't have splitAmong list from response — default to all members
+    splitAmong: members.map((m) => m.userId),
+  } : null
 
   return (
     <Fragment>
@@ -481,7 +752,7 @@ function Expenses({ tripId, members, currentUserId }) {
 
       <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
         <h2>Expenses</h2>
-        <Button size="sm" leadingIcon="plus" onClick={openModal}>Add expense</Button>
+        <Button size="sm" leadingIcon="plus" onClick={openAdd}>Add expense</Button>
       </div>
 
       {status === 'loading' && <p style={{ color: 'var(--text-muted)' }}>Loading expenses…</p>}
@@ -505,6 +776,7 @@ function Expenses({ tripId, members, currentUserId }) {
         <Card style={{ marginBottom: 24, padding: '0 16px' }}>
           {items.map((exp, i) => {
             const youPaid = exp.paidByUserId === currentUserId
+            const canEdit = youPaid || isAdmin
             return (
               <Fragment key={exp.id}>
                 {i > 0 && <div style={{ height: 1, background: 'var(--border-subtle)' }} />}
@@ -519,13 +791,20 @@ function Expenses({ tripId, members, currentUserId }) {
                     yourShare={exp.yourShare}
                     youPaid={youPaid}
                     settled={exp.settled}
+                    splitCount={exp.splitCount}
                   />
-                  {youPaid && (
-                    <IconButton
-                      icon="x" variant="ghost" size="sm" label="Delete expense"
-                      disabled={deletingId === exp.id}
-                      onClick={() => handleDelete(exp.id)}
-                    />
+                  {canEdit && (
+                    <div className="flex g1">
+                      <IconButton
+                        icon="edit" variant="ghost" size="sm" label="Edit expense"
+                        onClick={() => openEdit(exp)}
+                      />
+                      <IconButton
+                        icon="x" variant="ghost" size="sm" label="Delete expense"
+                        disabled={deletingId === exp.id}
+                        onClick={() => handleDelete(exp.id)}
+                      />
+                    </div>
                   )}
                 </div>
               </Fragment>
@@ -538,46 +817,394 @@ function Expenses({ tripId, members, currentUserId }) {
         <>
           <h2 style={{ marginBottom: 12 }}>Settle up</h2>
           <div className="col g3">
-            {debts.map((d) => {
-              const key = `${d.fromUserId}-${d.toUserId}`
-              return (
-                <SettleUpRow
-                  key={key}
-                  from={{ name: d.fromName }}
-                  to={{ name: d.toName }}
-                  amount={d.amount}
-                  currency={d.currency ?? 'USD'}
-                  settled={d.settled}
-                  onSettle={() => handleSettle(d.fromUserId, d.toUserId)}
-                />
-              )
-            })}
+            {debts.map((d) => (
+              <SettleUpRow
+                key={`${d.fromUserId}-${d.toUserId}`}
+                from={{ name: d.fromName }}
+                to={{ name: d.toName }}
+                amount={d.amount}
+                currency={d.currency ?? 'USD'}
+                settled={d.settled}
+                onSettle={() => openSettleModal(d)}
+              />
+            ))}
           </div>
         </>
       )}
 
       {actionError && <p className="auth-error" style={{ marginTop: 12 }}>{actionError}</p>}
 
-      <AddExpenseModal
+      <ExpenseModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleAdd}
+        onClose={() => setModal(null)}
+        onSubmit={isEditMode ? handleEdit : handleAdd}
         submitting={actionStatus === 'loading'}
         error={actionError}
         members={members}
-        currentUserId={currentUserId}
+        initial={editInitial}
+      />
+
+      <SettleModal
+        open={settleModal !== null}
+        debt={settleModal}
+        submitting={actionStatus === 'loading'}
+        error={actionError}
+        onClose={() => setSettleModal(null)}
+        onSettle={handleSettle}
       />
     </Fragment>
   )
 }
 
-function Chat() {
+const PROPOSAL_CATEGORIES = [
+  { value: 0, label: 'Sight' }, { value: 1, label: 'Food' }, { value: 2, label: 'Stay' },
+  { value: 3, label: 'Travel' }, { value: 4, label: 'Fun' }, { value: 5, label: 'Transit' },
+]
+
+function ProposalCard({ proposal, currentUserId, tripId }) {
+  const dispatch = useDispatch()
+  const myVote = proposal.votes?.find((v) => v.userId === currentUserId)
+  const approvals = proposal.votes?.filter((v) => v.approved).length ?? 0
+  const rejections = proposal.votes?.filter((v) => !v.approved).length ?? 0
+  const total = proposal.totalMembers ?? 1
+  const pct = Math.round((approvals / total) * 100)
+  const isOpen = proposal.status === 'Open'
+
+  const vote = (approved) => dispatch(voteProposal({ tripId, proposalId: proposal.id, approved }))
+
+  const statusColor = proposal.status === 'Approved' ? 'var(--owed)' : proposal.status === 'Rejected' ? 'var(--owe)' : 'var(--brand)'
+
   return (
-    <ComingSoon
-      icon="message"
-      title="Trip chat is on the way"
-      description="Group messaging for this trip isn't connected yet."
-    />
+    <div style={{
+      borderRadius: 'var(--r-lg)', border: '1.5px solid var(--border-subtle)',
+      background: 'var(--surface-card)', overflow: 'hidden',
+      boxShadow: 'var(--shadow-xs)', margin: '4px 0',
+    }}>
+      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="calendar" size={15} color="var(--brand)" />
+        <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 'var(--fw-semibold)', color: 'var(--brand)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Propunere activitate
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-xs)', fontWeight: 'var(--fw-semibold)', color: statusColor }}>
+          {proposal.status === 'Approved' ? '✓ Aprobată' : proposal.status === 'Rejected' ? '✗ Respinsă' : 'În vot'}
+        </span>
+      </div>
+
+      <div style={{ padding: '10px 14px' }}>
+        <p style={{ margin: '0 0 2px', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)', fontSize: 'var(--fs-sm)' }}>
+          {proposal.title}
+        </p>
+        {proposal.description && (
+          <p style={{ margin: '2px 0', fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{proposal.description}</p>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+          {proposal.location && (
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <Icon name="pin" size={12} /> {proposal.location}
+            </span>
+          )}
+          <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Icon name="clock" size={12} /> {new Date(proposal.startTime).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {proposal.cost && (
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <Icon name="wallet" size={12} /> ${proposal.cost}
+            </span>
+          )}
+        </div>
+
+        <div style={{ margin: '10px 0 6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{approvals} din {total} aprobă</span>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{pct}%</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 99, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--owed)', borderRadius: 99, transition: 'width 0.3s' }} />
+          </div>
+        </div>
+
+        {isOpen && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <button
+              onClick={() => vote(true)}
+              style={{
+                flex: 1, padding: '6px 0', borderRadius: 'var(--r-md)', cursor: 'pointer', fontSize: 'var(--fs-xs)',
+                fontWeight: 'var(--fw-semibold)', border: '1.5px solid',
+                borderColor: myVote?.approved === true ? 'var(--owed)' : 'var(--border-subtle)',
+                background: myVote?.approved === true ? 'var(--owed)' : 'transparent',
+                color: myVote?.approved === true ? '#fff' : 'var(--text-muted)',
+              }}
+            >
+              ✓ Aprob ({approvals})
+            </button>
+            <button
+              onClick={() => vote(false)}
+              style={{
+                flex: 1, padding: '6px 0', borderRadius: 'var(--r-md)', cursor: 'pointer', fontSize: 'var(--fs-xs)',
+                fontWeight: 'var(--fw-semibold)', border: '1.5px solid',
+                borderColor: myVote?.approved === false ? 'var(--owe)' : 'var(--border-subtle)',
+                background: myVote?.approved === false ? 'var(--owe)' : 'transparent',
+                color: myVote?.approved === false ? '#fff' : 'var(--text-muted)',
+              }}
+            >
+              ✗ Resping ({rejections})
+            </button>
+          </div>
+        )}
+        <p style={{ margin: '6px 0 0', fontSize: 'var(--fs-xs)', color: 'var(--text-subtle)' }}>
+          Propus de {proposal.proposedByName} · {new Date(proposal.createdAt).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ProposalForm({ tripId, onClose }) {
+  const dispatch = useDispatch()
+  const [form, setForm] = useState({
+    title: '', description: '', location: '',
+    startTime: '', endTime: '', category: 0, cost: '',
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  const [error, setError] = useState(null)
+
+  const handleSubmit = async () => {
+    if (!form.title || !form.startTime) return
+    setSubmitting(true)
+    setError(null)
+    const result = await dispatch(createProposal({
+      tripId,
+      proposal: {
+        title: form.title,
+        description: form.description || null,
+        location: form.location || null,
+        startTime: new Date(form.startTime).toISOString(),
+        endTime: form.endTime ? new Date(form.endTime).toISOString() : null,
+        category: Number(form.category),
+        cost: form.cost ? Number(form.cost) : null,
+      },
+    }))
+    setSubmitting(false)
+    if (createProposal.fulfilled.match(result)) {
+      onClose()
+    } else {
+      setError(result.payload ?? 'Eroare la trimitere')
+    }
+  }
+
+  return (
+    <div style={{ padding: '12px 0', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="flex items-center justify-between">
+        <span style={{ fontWeight: 'var(--fw-semibold)', fontSize: 'var(--fs-sm)', color: 'var(--text-strong)' }}>Propune activitate</span>
+        <IconButton icon="x" variant="ghost" size="sm" onClick={onClose} />
+      </div>
+      <Input placeholder="Titlu *" value={form.title} onChange={(e) => set('title', e.target.value)} />
+      <Input placeholder="Descriere" value={form.description} onChange={(e) => set('description', e.target.value)} />
+      <Input placeholder="Locație" value={form.location} onChange={(e) => set('location', e.target.value)} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Data/ora start *</label>
+          <input type="datetime-local" value={form.startTime} onChange={(e) => set('startTime', e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--border-subtle)', background: 'var(--surface-card)', color: 'var(--text-body)', fontSize: 'var(--fs-sm)' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Data/ora sfârșit</label>
+          <input type="datetime-local" value={form.endTime} onChange={(e) => set('endTime', e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--border-subtle)', background: 'var(--surface-card)', color: 'var(--text-body)', fontSize: 'var(--fs-sm)' }} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <select value={form.category} onChange={(e) => set('category', e.target.value)}
+          style={{ flex: 1, padding: '8px 10px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--border-subtle)', background: 'var(--surface-card)', color: 'var(--text-body)', fontSize: 'var(--fs-sm)' }}>
+          {PROPOSAL_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+        </select>
+        <Input placeholder="Cost ($)" value={form.cost} onChange={(e) => set('cost', e.target.value)} style={{ flex: 1 }} />
+      </div>
+      <Button variant="primary" loading={submitting} onClick={handleSubmit} style={{ width: '100%' }}>
+        Trimite propunerea
+      </Button>
+      {error && <p className="auth-error">{error}</p>}
+    </div>
+  )
+}
+
+function Chat({ tripId, currentUserId }) {
+  const dispatch = useDispatch()
+  const { token } = useSelector((s) => s.auth)
+  const { messages, status } = useSelector((s) => s.chat)
+  const { items: proposals } = useSelector((s) => s.proposals)
+  const [text, setText] = useState('')
+  const [connected, setConnected] = useState(false)
+  const [showProposalForm, setShowProposalForm] = useState(false)
+  const connectionRef = useRef(null)
+  const bottomRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    dispatch(fetchMessages(tripId))
+    dispatch(fetchProposals(tripId))
+
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl(`https://localhost:7213/hubs/chat`, {
+        accessTokenFactory: () => token,
+      })
+      .withAutomaticReconnect()
+      .configureLogging(signalR.LogLevel.Warning)
+      .build()
+
+    connection.on('ReceiveMessage', (msg) => {
+      if (!cancelled) dispatch(messageReceived(msg))
+    })
+    connection.on('ProposalCreated', (p) => {
+      if (!cancelled) dispatch(proposalReceived(p))
+    })
+    connection.on('ProposalUpdated', (p) => {
+      if (!cancelled) {
+        dispatch(proposalUpdated(p))
+        if (p.status === 'Approved') dispatch(fetchActivities(tripId))
+      }
+    })
+
+    connectionRef.current = connection
+
+    connection.start()
+      .then(() => {
+        if (cancelled) { connection.stop(); return }
+        setConnected(true)
+        return connection.invoke('JoinTrip', tripId)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+      setConnected(false)
+      connection.stop()
+      dispatch(clearMessages())
+      dispatch(clearProposals())
+    }
+  }, [tripId, token, dispatch])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async () => {
+    const trimmed = text.trim()
+    if (!trimmed || !connectionRef.current || !connected) return
+    setText('')
+    try {
+      await connectionRef.current.invoke('SendMessage', tripId, trimmed)
+    } catch (err) {
+      console.error('Send error:', err)
+    }
+  }
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  // Interleave messages and proposals sorted by time
+  const feed = [
+    ...messages.map((m) => ({ ...m, _type: 'message', _time: new Date(m.sentAt) })),
+    ...proposals.map((p) => ({ ...p, _type: 'proposal', _time: new Date(p.createdAt) })),
+  ].sort((a, b) => a._time - b._time)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 320 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {status === 'loading' && (
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)' }}>Se încarcă...</p>
+        )}
+        {feed.length === 0 && status === 'succeeded' && (
+          <div style={{ textAlign: 'center', marginTop: 40 }}>
+            <Icon name="message" size={32} color="var(--text-subtle)" style={{ marginBottom: 8 }} />
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-sm)' }}>Niciun mesaj încă. Fii primul!</p>
+          </div>
+        )}
+        {feed.map((item) => {
+          if (item._type === 'proposal') {
+            return (
+              <ProposalCard
+                key={`proposal-${item.id}`}
+                proposal={item}
+                currentUserId={currentUserId}
+                tripId={tripId}
+              />
+            )
+          }
+          const isMe = item.userId === currentUserId
+          return (
+            <div key={`msg-${item.id}`} style={{ display: 'flex', flexDirection: isMe ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8 }}>
+              {!isMe && <Avatar name={item.userName} size="sm" />}
+              <div style={{ maxWidth: '70%' }}>
+                {!isMe && (
+                  <p style={{ margin: '0 0 2px 4px', fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', fontWeight: 'var(--fw-medium)' }}>
+                    {item.userName}
+                  </p>
+                )}
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  background: isMe ? 'var(--brand)' : 'var(--surface-raised)',
+                  color: isMe ? '#fff' : 'var(--text-body)',
+                  fontSize: 'var(--fs-sm)', lineHeight: 1.4,
+                  border: isMe ? 'none' : '1px solid var(--border-subtle)',
+                  wordBreak: 'break-word',
+                }}>
+                  {item.text}
+                </div>
+                <p style={{ margin: '2px 4px 0', fontSize: 'var(--fs-xs)', color: 'var(--text-subtle)', textAlign: isMe ? 'right' : 'left' }}>
+                  {new Date(item.sentAt).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {showProposalForm && (
+        <ProposalForm tripId={tripId} onClose={() => setShowProposalForm(false)} />
+      )}
+
+      {!showProposalForm && (
+        <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+          <IconButton
+            icon="calendar"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowProposalForm(true)}
+            title="Propune activitate"
+          />
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder={connected ? 'Scrie un mesaj... (Enter pentru trimite)' : 'Se conectează...'}
+            disabled={!connected}
+            rows={1}
+            style={{
+              flex: 1, padding: '10px 14px', borderRadius: 'var(--r-lg)',
+              border: '1.5px solid var(--border-subtle)',
+              background: 'var(--surface-input, var(--surface-card))',
+              color: 'var(--text-body)',
+              fontSize: 'var(--fs-sm)', resize: 'none', fontFamily: 'var(--font-body)',
+              outline: 'none', lineHeight: 1.4,
+            }}
+          />
+          <Button variant="primary" onClick={handleSend} disabled={!text.trim() || !connected}>
+            <Icon name="arrowRight" size={18} />
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -786,10 +1413,152 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
   )
 }
 
+const QUICK_PROMPTS = [
+  'Ce activități îmi recomanzi în zonă?',
+  'Unde pot mânca bine? Low/mid/high budget',
+  'Ce obiceiuri locale trebuie să știu?',
+  'Transport local — cum mă deplasez?',
+  'Ce să vizitez în prima zi?',
+]
+
+function AiChat({ tripId, destination }) {
+  const { token } = useSelector((s) => s.auth)
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: `Bună! Sunt asistentul tău AI pentru călătoria în **${destination}**. 🌍\n\nTe pot ajuta cu:\n- 🏛️ Recomandări de activități și atracții\n- 🍽️ Restaurante și mâncare locală\n- 🚌 Transport și deplasare\n- 🎭 Obiceiuri și cultură locală\n- 💰 Variante budget, mid-range și premium\n\nCe vrei să știi?`,
+    },
+  ])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const bottomRef = useRef(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const send = async (text) => {
+    const msg = text ?? input.trim()
+    if (!msg || loading) return
+    setInput('')
+
+    const userMsg = { role: 'user', content: msg }
+    const history = messages.filter((m) => m.role !== 'assistant' || messages.indexOf(m) > 0)
+    setMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '...' }])
+    setLoading(true)
+
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'}/api/trips/${tripId}/ai/chat`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            message: msg,
+            history: history.map((m) => ({ role: m.role, content: m.content })),
+          }),
+        }
+      )
+      const data = await res.json()
+      const reply = data.reply ?? data.message ?? 'Eroare la răspuns.'
+      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: reply }])
+    } catch {
+      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: 'Eroare de conexiune. Încearcă din nou.' }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderContent = (text) => {
+    // Simple markdown-like rendering
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br/>')
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '65vh', minHeight: 360 }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 16 }}>
+        {messages.map((msg, i) => {
+          const isUser = msg.role === 'user'
+          const isLoading = msg.content === '...'
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-start' }}>
+              {!isUser && (
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                  background: 'linear-gradient(135deg, var(--blue-700), var(--cyan-500))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16,
+                }}>✨</div>
+              )}
+              <div style={{
+                maxWidth: '78%',
+                padding: '10px 14px',
+                borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                background: isUser ? 'var(--brand)' : 'var(--surface-raised)',
+                color: isUser ? '#fff' : 'var(--text-body)',
+                fontSize: 'var(--fs-sm)', lineHeight: 1.6,
+                border: isUser ? 'none' : '1px solid var(--border-subtle)',
+              }}>
+                {isLoading ? (
+                  <span style={{ opacity: 0.5 }}>Se gândește...</span>
+                ) : (
+                  <span dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }} />
+                )}
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+        {QUICK_PROMPTS.map((p) => (
+          <button
+            key={p}
+            onClick={() => send(p)}
+            disabled={loading}
+            style={{
+              padding: '4px 10px', borderRadius: 'var(--r-pill)', fontSize: 'var(--fs-xs)',
+              border: '1.5px solid var(--border-subtle)', background: 'var(--surface-card)',
+              color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 'var(--fw-medium)',
+            }}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder="Întreabă orice despre destinație..."
+          disabled={loading}
+          rows={1}
+          style={{
+            flex: 1, padding: '10px 14px', borderRadius: 'var(--r-lg)',
+            border: '1.5px solid var(--border-subtle)',
+            background: 'var(--surface-input, var(--surface-card))',
+            color: 'var(--text-body)', fontSize: 'var(--fs-sm)',
+            resize: 'none', fontFamily: 'var(--font-body)', outline: 'none', lineHeight: 1.4,
+          }}
+        />
+        <Button variant="primary" onClick={() => send()} disabled={!input.trim() || loading}>
+          <Icon name="arrowRight" size={18} />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 /* ============ PAGE ============ */
 const TABS = [
   { value: 'itinerary', label: 'Itinerary' }, { value: 'expenses', label: 'Expenses' },
   { value: 'members', label: 'Members' }, { value: 'chat', label: 'Chat' },
+  { value: 'ai', label: '✨ AI' },
 ]
 
 function TripDetail() {
@@ -860,12 +1629,13 @@ function TripDetail() {
             />
           )}
           {tab === 'expenses' && (
-            <Expenses tripId={trip.id} members={trip.members} currentUserId={currentUserId} />
+            <Expenses tripId={trip.id} members={trip.members} currentUserId={currentUserId} isAdmin={isAdmin} />
           )}
           {tab === 'members' && (
             <Members members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin} tripId={trip.id} />
           )}
-          {tab === 'chat' && <Chat />}
+          {tab === 'chat' && <Chat tripId={trip.id} currentUserId={currentUserId} />}
+          {tab === 'ai' && <AiChat tripId={trip.id} destination={trip.destination} />}
         </div>
       </main>
     </div>

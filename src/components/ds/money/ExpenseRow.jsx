@@ -14,7 +14,7 @@ const CAT = {
   shop: { icon: 'receipt', bg: 'var(--owed-soft)', fg: 'var(--green-600)' },
 };
 
-function ExpenseRow({ title, category = 'food', paidBy, total = 0, currency = 'USD', yourShare, youPaid = false, settled = false, onClick, style, ...rest }) {
+function ExpenseRow({ title, category = 'food', paidBy, total = 0, currency = 'USD', yourShare, youPaid = false, settled = false, splitCount, onClick, style, ...rest }) {
   const c = CAT[category] || CAT.food;
   let formattedTotal;
   try {
@@ -22,6 +22,9 @@ function ExpenseRow({ title, category = 'food', paidBy, total = 0, currency = 'U
   } catch {
     formattedTotal = '$' + total.toFixed(2);
   }
+
+  const splitLabel = splitCount > 0 ? `÷ ${splitCount} people` : null;
+
   return (
     <div
       onClick={onClick}
@@ -38,7 +41,13 @@ function ExpenseRow({ title, category = 'food', paidBy, total = 0, currency = 'U
         <div style={{ font: "var(--fw-regular) var(--fs-sm)/1 'Inter', sans-serif", color: 'var(--text-muted)', marginTop: 3 }}>
           {paidBy ? (
             <>
-              {youPaid ? 'You' : paidBy} paid <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--fw-semibold)', color: 'var(--text-body)' }}>{formattedTotal}</span>
+              {youPaid ? 'You' : paidBy} paid{' '}
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--fw-semibold)', color: 'var(--text-body)' }}>
+                {formattedTotal}
+              </span>
+              {splitLabel && (
+                <span style={{ marginLeft: 6, color: 'var(--text-subtle)' }}>{splitLabel}</span>
+              )}
             </>
           ) : null}
         </div>
@@ -52,7 +61,7 @@ function ExpenseRow({ title, category = 'food', paidBy, total = 0, currency = 'U
           <>
             <MoneyAmount amount={Math.abs(yourShare ?? 0)} currency={currency} tone={youPaid ? 'owed' : 'owe'} size="md" />
             <div style={{ font: "var(--fw-medium) var(--fs-xs)/1 'Inter', sans-serif", color: 'var(--text-subtle)', marginTop: 3 }}>
-              {youPaid ? 'you lent' : 'your share'}
+              {youPaid ? 'you are owed' : 'your share'}
             </div>
           </>
         )}

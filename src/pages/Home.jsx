@@ -15,14 +15,19 @@ function formatDateRange(start, end) {
   return `${startStr} – ${new Date(end).toLocaleDateString('en-US', opts)}`
 }
 
-function TopBar({ user, onLogout }) {
+function TopBar({ user }) {
+  const navigate = useNavigate()
   return (
     <header className="topbar">
       <div className="app-wrap app-wrap-wide flex items-center g4" style={{ height: '100%' }}>
         <div className="brand-lockup">TripSplit</div>
         <div className="grow" />
-        <Avatar name={user?.name || user?.email || '?'} size="md" ring />
-        <IconButton icon="logOut" label="Log out" onClick={onLogout} />
+        <button
+          onClick={() => navigate('/profile')}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}
+        >
+          <Avatar name={user?.name || user?.email || '?'} size="md" ring />
+        </button>
       </div>
     </header>
   )
@@ -92,7 +97,7 @@ function Home() {
 
   return (
     <div className="ts-root">
-      <TopBar user={user} onLogout={() => dispatch(logout())} />
+      <TopBar user={user} />
       <main className="app-wrap app-wrap-wide" style={{ padding: '24px 24px 80px' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 20 }}>
           <h1>Your trips</h1>

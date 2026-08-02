@@ -53,6 +53,41 @@ export const deleteExpense = createAsyncThunk(
   },
 )
 
+export const updateExpense = createAsyncThunk(
+  'expenses/updateExpense',
+  async ({ tripId, expenseId, updates }, { getState, rejectWithValue }) => {
+    try {
+      return await apiRequest(`/trips/${tripId}/expenses/${expenseId}`, {
+        method: 'PUT',
+        body: updates,
+        token: getState().auth.token,
+      })
+    } catch (err) {
+      return rejectWithValue(err.message)
+    }
+  },
+)
+
+export const createSettlement = createAsyncThunk(
+  'expenses/createSettlement',
+  async ({ tripId, fromUserId, toUserId, amount, method }, { getState, rejectWithValue }) => {
+    try {
+      const token = getState().auth.token
+      const result = await apiRequest(`/trips/${tripId}/settlements`, {
+        method: 'POST',
+        body: { fromUserId, toUserId, amount, method },
+        token,
+      })
+      // For card payments, result contains a checkoutUrl — don't fetch balances yet
+      if (result.checkoutUrl) return { settlement: result, balances: null }
+      const balances = await apiRequest(`/trips/${tripId}/expenses/balances`, { token })
+      return { settlement: result, balances }
+    } catch (err) {
+      return rejectWithValue(err.message)
+    }
+  },
+)
+
 export const settleDebt = createAsyncThunk(
   'expenses/settleDebt',
   async ({ tripId, fromUserId, toUserId }, { getState, rejectWithValue }) => {
@@ -151,6 +186,33 @@ const expensesSlice = createSlice({
         state.balances = action.payload.balances
       })
       .addCase(settleDebt.rejected, (state, action) => {
+        state.actionStatus = 'failed'
+        state.actionError = action.payload
+      })
+
+      .addCase(createSettlement.pending, (state) => {
+        state.actionStatus = 'loading'
+        state.actionError = null
+      })
+      .addCase(createSettlement.fulfilled, (state, action) => {
+        state.actionStatus = 'succeeded'
+        if (action.payload.balances) state.balances = action.payload.balances
+      })
+      .addCase(createSettlement.rejected, (state, action) => {
+        state.actionStatus = 'failed'
+        state.actionError = action.payload
+      })
+
+      .addCase(updateExpense.pending, (state) => {
+        state.actionStatus = 'loading'
+        state.actionError = null
+      })
+      .addCase(updateExpense.fulfilled, (state, action) => {
+        state.actionStatus = 'succeeded'
+        const idx = state.items.findIndex((e) => e.id === action.payload.id)
+        if (idx !== -1) state.items[idx] = action.payload
+      })
+      .addCase(updateExpense.rejected, (state, action) => {
         state.actionStatus = 'failed'
         state.actionError = action.payload
       })

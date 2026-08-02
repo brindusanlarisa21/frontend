@@ -1,0 +1,123 @@
+{
+  "nav": {
+    "trips": "Trips",
+    "itinerary": "Itinerary",
+    "expenses": "Expenses",
+    "members": "Members",
+    "chat": "Chat",
+    "ai": "✨ AI"
+  },
+  "profile": {
+    "title": "My Profile",
+    "name": "Name",
+    "email": "Email",
+    "paymentLink": "Payment link (Revolut / PayPal / IBAN)",
+    "paymentLinkHint": "Other members will see this when they owe you money.",
+    "language": "Language",
+    "save": "Save",
+    "saved": "Saved!",
+    "logout": "Log out",
+    "logoutConfirm": "Are you sure you want to log out?"
+  },
+  "trip": {
+    "upcoming": "Upcoming",
+    "active": "Active",
+    "completed": "Completed",
+    "noActivities": "No activities yet.",
+    "addActivity": "Add activity",
+    "deleteActivity": "Delete"
+  },
+  "expenses": {
+    "title": "Expenses",
+    "add": "Add expense",
+    "edit": "Edit",
+    "delete": "Delete",
+    "settle": "Settle",
+    "settled": "Settled",
+    "youOwe": "You owe",
+    "youAreOwed": "You are owed",
+    "net": "Net balance",
+    "paidBy": "Paid by",
+    "splitAmong": "Split among",
+    "perPerson": "per person",
+    "settleUp": "Settle up",
+    "noExpenses": "No expenses yet.",
+    "youPaid": "you paid",
+    "youAreOwedLabel": "you are owed"
+  },
+  "members": {
+    "title": "Members",
+    "add": "Add member",
+    "remove": "Remove",
+    "admin": "Admin",
+    "member": "Member",
+    "search": "Search by name or email"
+  },
+  "chat": {
+    "placeholder": "Write a message... (Enter to send)",
+    "connecting": "Connecting...",
+    "noMessages": "No messages yet. Be the first!",
+    "propose": "Propose activity"
+  },
+  "proposal": {
+    "title": "Activity proposal",
+    "proposedBy": "Proposed by",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approved": "✓ Approved",
+    "rejected": "✗ Rejected",
+    "voting": "Voting",
+    "outOf": "out of",
+    "approve_votes": "approve",
+    "send": "Send proposal",
+    "form": {
+      "title": "Title",
+      "description": "Description",
+      "location": "Location",
+      "startTime": "Start date/time",
+      "endTime": "End date/time",
+      "category": "Category",
+      "cost": "Cost ($)"
+    }
+  },
+  "ai": {
+    "greeting": "Hi! I'm your AI assistant for the trip to **{{destination}}**. 🌍\n\nI can help with:\n- 🏛️ Activity and attraction recommendations\n- 🍽️ Restaurants and local food\n- 🚌 Transport and getting around\n- 🎭 Local customs and culture\n- 💰 Budget, mid-range and premium options\n\nWhat do you want to know?",
+    "placeholder": "Ask anything about the destination...",
+    "prompts": {
+      "activities": "What activities do you recommend nearby?",
+      "food": "Where to eat well? Low/mid/high budget",
+      "customs": "What local customs should I know?",
+      "transport": "Local transport — how do I get around?",
+      "firstDay": "What to visit on the first day?"
+    }
+  },
+  "auth": {
+    "login": "Log in",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "confirm": "Confirm",
+    "back": "Back"
+  },
+  "settle": {
+    "title": "Settle up",
+    "pays": "pays",
+    "openLink": "Open payment link",
+    "markPaid": "I paid — mark as settled",
+    "confirmCash": "Confirm that {{from}} paid {{to}} in cash. This will mark the debt as settled immediately.",
+    "noLink": "{{name}} hasn't set a payment link. Pay via bank transfer, Revolut or cash, then confirm.",
+    "paymentLinkOf": "Payment link of {{name}}"
+  }
+}

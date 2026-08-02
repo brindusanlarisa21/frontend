@@ -7,6 +7,7 @@ import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import ProtectedRoute from './routes/ProtectedRoute'
+import Profile from './pages/Profile'
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Home />} />
         <Route path="/trips/:tripId" element={<TripDetail />} />
+        <Route path="/profile" element={<Profile />} />
       </Route>
     </Routes>
   )

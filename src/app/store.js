@@ -3,6 +3,8 @@ import authReducer from '../features/auth/authSlice'
 import tripsReducer from '../features/trips/tripsSlice'
 import activitiesReducer from '../features/activities/activitiesSlice'
 import expensesReducer from '../features/expenses/expensesSlice'
+import chatReducer from '../features/chat/chatSlice'
+import proposalsReducer from '../features/proposals/proposalsSlice'
 
 export const store = configureStore({
   reducer: {
@@ -10,5 +12,7 @@ export const store = configureStore({
     trips: tripsReducer,
     activities: activitiesReducer,
     expenses: expensesReducer,
+    chat: chatReducer,
+    proposals: proposalsReducer,
   },
 })
