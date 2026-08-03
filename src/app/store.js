@@ -5,6 +5,7 @@ import activitiesReducer from '../features/activities/activitiesSlice'
 import expensesReducer from '../features/expenses/expensesSlice'
 import chatReducer from '../features/chat/chatSlice'
 import proposalsReducer from '../features/proposals/proposalsSlice'
+import groupReducer from '../features/group/groupSlice'
 
 export const store = configureStore({
   reducer: {
@@ -14,5 +15,6 @@ export const store = configureStore({
     expenses: expensesReducer,
     chat: chatReducer,
     proposals: proposalsReducer,
+    group: groupReducer,
   },
 })

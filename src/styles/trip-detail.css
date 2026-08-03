@@ -242,22 +242,70 @@ input, textarea, select { font-family: inherit; }
   white-space: nowrap;
   min-width: 58px;
 }
-.day-pill:hover { border-color: var(--blue-300); }
+.day-pill:hover {
+  border-color: var(--blue-300);
+  background: var(--blue-tint);
+}
+.day-pill:hover .day-pill-wd,
+.day-pill:hover .day-pill-d { color: var(--blue-700); }
+
 .day-pill.active {
   background: var(--ink-2);
   border-color: var(--ink-2);
-  color: #fff;
   box-shadow: 0 8px 18px rgba(18,41,74,.26);
 }
 .day-pill.free {
   background: var(--blue-tint);
   border: 1px dashed #9cc0f7;
+}
+
+/* Inactive days stay readable — muted, not invisible. */
+.day-pill-wd {
+  font: 800 10px/1 'Archivo', sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.day-pill-d {
+  font: 800 16px/1 'Archivo', sans-serif;
+  color: var(--text-body);
+}
+.day-pill.active .day-pill-wd { color: rgba(255,255,255,.65); }
+.day-pill.active .day-pill-d  { color: #fff; }
+
+/* Day picker with arrows */
+.day-picker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.day-picker-wrap .day-picker {
+  padding: 0;
+  border-bottom: none;
+  flex: 1;
+  min-width: 0;
+  scroll-behavior: smooth;
+}
+.day-nav {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: all 120ms;
+}
+.day-nav:hover:not(:disabled) {
+  border-color: var(--blue-300);
   color: var(--blue-700);
 }
-.day-pill-wd { font: 800 10px/1 'Archivo', sans-serif; letter-spacing: .08em; text-transform: uppercase; }
-.day-pill-d  { font: 800 16px/1 'Archivo', sans-serif; }
-.day-pill.active .day-pill-wd,
-.day-pill.active .day-pill-d { color: #fff; }
+.day-nav:disabled { opacity: .3; cursor: default; }
 
 /* ============================================================
    DAY SECTION
@@ -967,4 +1015,47 @@ input, textarea, select { font-family: inherit; }
 :focus-visible {
   outline: 2px solid var(--blue-500);
   outline-offset: 2px;
+}
+
+/* ============================================================
+   Checkbox — the native unchecked box renders with a heavy dark
+   border, so it is drawn from scratch to keep the empty state light.
+   ============================================================ */
+.checkbox-light {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 5px;
+  border: 1.5px solid rgba(18, 41, 74, .18);
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: background 120ms, border-color 120ms;
+}
+
+.checkbox-light:hover {
+  border-color: var(--blue-300);
+}
+
+.checkbox-light::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform 120ms ease-out;
+  background: #fff;
+  clip-path: polygon(14% 44%, 0 65%, 40% 100%, 100% 16%, 84% 0, 39% 68%);
+}
+
+.checkbox-light:checked {
+  background: var(--blue-300);
+  border-color: var(--blue-300);
+}
+
+.checkbox-light:checked::before {
+  transform: scale(1);
 }

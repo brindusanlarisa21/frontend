@@ -1,6 +1,7 @@
 /* TripSplit — Color tokens (Fluent × Modernist redesign) */
 :root {
   /* Brand blues */
+  --cyan-500: #4f97ff;
   --blue-300: #4f97ff;
   --blue-400: #3d86f5;
   --blue-500: #1f6feb;

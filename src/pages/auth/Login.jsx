@@ -68,7 +68,11 @@ function Login() {
     e.preventDefault()
     dispatch(clearAuthError())
     const result = await dispatch(login({ email, password }))
-    if (login.fulfilled.match(result)) navigate('/')
+    if (login.fulfilled.match(result)) {
+      // Someone who arrived from an invite link goes back to it after signing in.
+      const pendingInvite = localStorage.getItem('pendingInvite')
+      navigate(pendingInvite ? `/invite/${pendingInvite}` : '/')
+    }
   }
 
   return (

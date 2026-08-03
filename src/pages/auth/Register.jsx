@@ -17,7 +17,11 @@ function Register() {
     e.preventDefault()
     dispatch(clearAuthError())
     const result = await dispatch(register({ name, email, password }))
-    if (register.fulfilled.match(result)) navigate('/')
+    if (register.fulfilled.match(result)) {
+      // Someone who arrived from an invite link goes back to it after signing up.
+      const pendingInvite = localStorage.getItem('pendingInvite')
+      navigate(pendingInvite ? `/invite/${pendingInvite}` : '/')
+    }
   }
 
   return (

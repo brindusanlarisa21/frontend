@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -55,7 +55,11 @@ function ActivityMap({ activities = [], height = 320, style }) {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
 
-  const pinned = activities.filter((a) => a.latitude != null && a.longitude != null);
+  // Memoised so the marker effect does not re-run (and re-fit the view) on every render.
+  const pinned = useMemo(
+    () => activities.filter((a) => a.latitude != null && a.longitude != null),
+    [activities],
+  );
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -115,7 +119,7 @@ function ActivityMap({ activities = [], height = 320, style }) {
               boxShadow: 'var(--shadow-sm)', font: "var(--fw-medium) var(--fs-sm)/1.3 'Inter', sans-serif", color: 'var(--text-muted)',
             }}
           >
-            Add a place to your activities to see it here.
+            Adaugă un loc la o activitate ca să apară aici.
           </span>
         </div>
       )}

@@ -12,6 +12,7 @@ export { default as MoneyAmount } from './core/MoneyAmount';
 export { default as SegmentedControl } from './core/SegmentedControl';
 
 export { default as BalanceHero } from './money/BalanceHero';
+export { default as BudgetRing } from './money/BudgetRing';
 export { default as ExpenseRow } from './money/ExpenseRow';
 export { default as SettleUpRow } from './money/SettleUpRow';
 

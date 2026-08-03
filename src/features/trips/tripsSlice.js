@@ -27,6 +27,33 @@ export const createTrip = createAsyncThunk(
   },
 )
 
+export const updateTrip = createAsyncThunk(
+  'trips/updateTrip',
+  async ({ tripId, changes }, { getState, rejectWithValue }) => {
+    try {
+      // The API replaces the whole trip, so merge changes onto what we already have.
+      const current = getState().trips.current
+      return await apiRequest(`/trips/${tripId}`, {
+        method: 'PUT',
+        body: {
+          title: current?.title,
+          description: current?.description ?? null,
+          destination: current?.destination,
+          startDate: current?.startDate,
+          endDate: current?.endDate,
+          coverImageUrl: current?.coverImageUrl ?? null,
+          budget: current?.budget ?? null,
+          currency: current?.currency ?? 'EUR',
+          ...changes,
+        },
+        token: getState().auth.token,
+      })
+    } catch (err) {
+      return rejectWithValue(err.message)
+    }
+  },
+)
+
 export const fetchTripById = createAsyncThunk(
   'trips/fetchTripById',
   async (tripId, { getState, rejectWithValue }) => {
@@ -132,6 +159,12 @@ const tripsSlice = createSlice({
       .addCase(fetchTripById.fulfilled, (state, action) => {
         state.currentStatus = 'succeeded'
         state.current = extractTrip(action.payload)
+      })
+      .addCase(updateTrip.fulfilled, (state, action) => {
+        const updated = extractTrip(action.payload)
+        state.current = updated
+        const i = state.items.findIndex((t) => t.id === updated.id)
+        if (i !== -1) state.items[i] = updated
       })
       .addCase(fetchTripById.rejected, (state, action) => {
         state.currentStatus = 'failed'
