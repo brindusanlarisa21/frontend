@@ -1,15 +1,55 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../features/auth/authSlice'
+import '../styles/ds/index.css'
+import '../styles/trip-detail.css'
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'
+
+function AppRail({ user }) {
+  const navigate = useNavigate()
+  const dispatch = useDispatch()
+  return (
+    <nav className="app-rail">
+      <div className="rail-logo">
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M16 2C10.5 2 6 6.4 6 11.9 6 19.5 16 30 16 30V2Z" fill="#1f6feb" />
+            <path d="M16 2c5.5 0 10 4.4 10 9.9C26 19.5 16 30 16 30V2Z" fill="#4f97ff" />
+            <circle cx="16" cy="11.6" r="3.1" fill="#fff" />
+          </svg>
+        </button>
+      </div>
+      <button className="rail-item" onClick={() => navigate('/')}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <span className="rail-item-label">Acasă</span>
+      </button>
+      <div className="rail-spacer" />
+      <button className="rail-item active">
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#3d86f5,#1f6feb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff' }}>
+          {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+        </div>
+        <span className="rail-item-label">Profil</span>
+      </button>
+      <button className="rail-item" onClick={() => { dispatch(logout()); navigate('/login') }} style={{ marginTop: 4 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span className="rail-item-label">Ieșire</span>
+      </button>
+    </nav>
+  )
+}
 
 export default function Profile() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const dispatch = useDispatch()
+  const user = useSelector(s => s.auth.user)
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -21,53 +61,35 @@ export default function Profile() {
 
   const token = localStorage.getItem('token')
 
-  // Extract name from JWT as fallback
-  const nameFromToken = (() => {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]))
-      return payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']
-        || payload.name || payload.unique_name || ''
-    } catch { return '' }
-  })()
-
   useEffect(() => {
-    fetch(`${API_BASE}/api/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`${API_BASE}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
-        setName(data.name || nameFromToken || '')
-        setEmail(data.email ?? '')
+        setName(data.name || user?.name || '')
+        setEmail(data.email || user?.email || '')
         setPaymentLink(data.paymentLink ?? '')
         setLoading(false)
       })
       .catch(() => {
-        setName(nameFromToken)
+        setName(user?.name || '')
+        setEmail(user?.email || '')
         setLoading(false)
       })
   }, [token])
 
   const handleSave = async () => {
-    setSaving(true)
-    setError('')
-    setSaved(false)
+    setSaving(true); setError(''); setSaved(false)
     try {
       const res = await fetch(`${API_BASE}/api/users/me`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name, paymentLink }),
       })
       if (!res.ok) throw new Error()
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch {
-      setError(t('common.error'))
-    } finally {
-      setSaving(false)
-    }
+    } catch { setError(t('common.error')) }
+    finally { setSaving(false) }
   }
 
   const handleLanguage = (lang) => {
@@ -82,217 +104,92 @@ export default function Profile() {
     }
   }
 
-  if (loading) return <div style={styles.center}>{t('common.loading')}</div>
-
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.header}>
-          <button onClick={() => navigate(-1)} style={styles.backBtn} title={t('common.back')}>←</button>
-          <h1 style={styles.title}>{t('profile.title')}</h1>
+    <>
+      <AppRail user={user} />
+      <div className="app-content">
+        <div style={{ maxWidth: 760, padding: '32px 40px' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingBottom: 22, borderBottom: '2px solid var(--border-strong)', marginBottom: 28 }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg,#3d86f5,#1f6feb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+              {name?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div>
+              <div style={{ font: '800 24px/1 Archivo, sans-serif', letterSpacing: '-0.02em', color: 'var(--ink)', marginBottom: 4 }}>{name || 'Profil'}</div>
+              <div style={{ font: '400 13px/1 Archivo, sans-serif', color: 'var(--text-muted)' }}>{email}</div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+              {/* Limbă */}
+              <div>
+                <div className="kicker" style={{ marginBottom: 10 }}>Limba aplicației</div>
+                <button
+                  onClick={() => handleLanguage(i18n.language === 'ro' ? 'en' : 'ro')}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 'var(--r-sm)', border: '1.5px solid var(--blue-500)', background: 'var(--blue-tint)', cursor: 'pointer', width: 200 }}
+                >
+                  <span style={{ font: '800 14px/1 Archivo, sans-serif', color: 'var(--blue-700)' }}>
+                    {i18n.language === 'ro' ? '🇷🇴 Română' : '🇬🇧 English'}
+                  </span>
+                  <span style={{ color: 'var(--blue-500)', fontSize: 16 }}>⇄</span>
+                </button>
+                <div style={{ font: '400 12px/1.4 Archivo, sans-serif', color: 'var(--text-faint)', marginTop: 6 }}>
+                  Se aplică imediat și se ține minte pe acest dispozitiv.
+                </div>
+              </div>
+
+              <hr className="rule-2" />
+
+              {/* Grid 2 col */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label className="input-label">Nume afișat</label>
+                  <input className="input-field" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="input-label">Email</label>
+                  <input className="input-field" value={email} readOnly style={{ background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'not-allowed' }} />
+                </div>
+              </div>
+
+              {/* Link plată */}
+              <div>
+                <label className="input-label">Link de plată (Revolut / PayPal / IBAN)</label>
+                <input
+                  className="input-field"
+                  value={paymentLink}
+                  onChange={e => setPaymentLink(e.target.value)}
+                  placeholder="https://revolut.me/..."
+                />
+                <div style={{ font: '400 12px/1.4 Archivo, sans-serif', color: 'var(--text-faint)', marginTop: 6 }}>
+                  Ceilalți membri îl vor vedea când îți datorează bani.
+                </div>
+              </div>
+
+              {error && <div className="auth-error"><span>⚠</span> {error}</div>}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Se salvează…' : saved ? '✓ Salvat!' : 'Salvează'}
+                </button>
+              </div>
+
+              <hr className="rule-2" />
+
+              <div>
+                <button className="btn-danger" onClick={handleLogout}>
+                  Deconectare
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-
-        <div style={styles.avatar}>
-          {name?.[0]?.toUpperCase() ?? '?'}
-        </div>
-
-        <div style={styles.field}>
-          <label style={styles.label}>{t('profile.name')}</label>
-          <input
-            style={styles.input}
-            value={name}
-            onChange={e => setName(e.target.value)}
-          />
-        </div>
-
-        <div style={styles.field}>
-          <label style={styles.label}>{t('profile.email')}</label>
-          <input style={{ ...styles.input, ...styles.readOnly }} value={email} readOnly />
-        </div>
-
-        <div style={styles.field}>
-          <label style={styles.label}>{t('profile.paymentLink')}</label>
-          <input
-            style={styles.input}
-            value={paymentLink}
-            onChange={e => setPaymentLink(e.target.value)}
-            placeholder="https://revolut.me/..."
-          />
-          <span style={styles.hint}>{t('profile.paymentLinkHint')}</span>
-        </div>
-
-        <div style={styles.field}>
-          <label style={styles.label}>{t('profile.language')}</label>
-          <button
-            style={styles.langToggle}
-            onClick={() => handleLanguage(i18n.language === 'ro' ? 'en' : 'ro')}
-          >
-            <span style={styles.langCurrent}>
-              {i18n.language === 'ro' ? '🇷🇴 Română' : '🇬🇧 English'}
-            </span>
-            <span style={styles.langSwitch}>⇄</span>
-          </button>
-        </div>
-
-        {error && <p style={styles.error}>{error}</p>}
-
-        <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
-          {saving ? t('common.loading') : saved ? t('profile.saved') : t('profile.save')}
-        </button>
-
-        <hr style={styles.divider} />
-
-        <button style={styles.logoutBtn} onClick={handleLogout}>
-          {t('profile.logout')}
-        </button>
       </div>
-    </div>
+    </>
   )
-}
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: '#f5f5f5',
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    padding: '32px 16px',
-  },
-  card: {
-    background: '#fff',
-    borderRadius: 16,
-    padding: '32px 28px',
-    width: '100%',
-    maxWidth: 480,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 24,
-  },
-  backBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: 20,
-    cursor: 'pointer',
-    padding: '4px 8px',
-    borderRadius: 8,
-    color: '#555',
-  },
-  title: {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 700,
-    color: '#1a1a2e',
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: '50%',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 700,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '0 auto 28px',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#555',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
-  input: {
-    padding: '10px 14px',
-    borderRadius: 10,
-    border: '1.5px solid #e0e0e0',
-    fontSize: 15,
-    outline: 'none',
-    transition: 'border-color 0.2s',
-    background: '#fff',
-  },
-  readOnly: {
-    background: '#f7f7f7',
-    color: '#888',
-    cursor: 'not-allowed',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#999',
-  },
-  langToggle: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '10px 14px',
-    borderRadius: 10,
-    border: '1.5px solid #6366f1',
-    background: '#ede9fe',
-    cursor: 'pointer',
-    width: '100%',
-    textAlign: 'left',
-  },
-  langCurrent: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#6366f1',
-  },
-  langSwitch: {
-    fontSize: 16,
-    color: '#6366f1',
-    opacity: 0.7,
-  },
-  saveBtn: {
-    width: '100%',
-    padding: '12px',
-    borderRadius: 10,
-    border: 'none',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 700,
-    cursor: 'pointer',
-    marginTop: 4,
-  },
-  divider: {
-    border: 'none',
-    borderTop: '1px solid #f0f0f0',
-    margin: '28px 0 20px',
-  },
-  logoutBtn: {
-    width: '100%',
-    padding: '12px',
-    borderRadius: 10,
-    border: '1.5px solid #ef4444',
-    background: '#fff',
-    color: '#ef4444',
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  center: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    fontSize: 16,
-    color: '#888',
-  },
-  error: {
-    color: '#ef4444',
-    fontSize: 13,
-    marginBottom: 8,
-  },
 }

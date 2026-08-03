@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
+import { logout } from '../../features/auth/authSlice'
 import {
   Button, IconButton, Input, Badge, Card, Avatar,
   TripCover, SegmentedControl, Icon, Chip, ActivityCard, DatePicker, ActivityMap, LocationSearch,
@@ -103,27 +104,37 @@ function ProfileModal({ open, onClose }) {
   )
 }
 
-function TopBar({ tripTitle, user }) {
+function AppRail({ user, activeTab, onTabChange }) {
   const navigate = useNavigate()
+  const dispatch = useDispatch()
+
+  const railTabs = [
+    { value: 'itinerary', label: 'Plan', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+    { value: 'expenses', label: 'Bani', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
+    { value: 'chat', label: 'Chat', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+    { value: 'members', label: 'Grup', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+    { value: 'ai', label: 'AI', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg> },
+  ]
 
   return (
-    <header className="topbar">
-      <div className="app-wrap app-wrap-wide flex items-center g4" style={{ height: '100%' }}>
-        <Link to="/" style={{ display: 'flex' }}><Logo /></Link>
-        <div className="flex items-center g2" style={{ color: 'var(--text-muted)', font: "var(--fw-medium) var(--fs-sm)/1 var(--font-body)" }}>
-          <Link to="/" className="hide-sm">Trips</Link>
-          {tripTitle && <span className="hide-sm">/</span>}
-          {tripTitle && <b style={{ color: 'var(--text-strong)', fontWeight: 'var(--fw-bold)' }}>{tripTitle}</b>}
-        </div>
-        <div className="grow" />
-        <button
-          onClick={() => navigate('/profile')}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}
-        >
-          <Avatar name={user?.name || user?.email || '?'} size="md" ring />
-        </button>
+    <nav className="app-rail">
+      <div className="rail-logo">
+        <Link to="/"><Logo size={32} /></Link>
       </div>
-    </header>
+      {railTabs.map(t => (
+        <button key={t.value} className={`rail-item ${activeTab === t.value ? 'active' : ''}`} onClick={() => onTabChange(t.value)}>
+          {t.icon}
+          <span className="rail-item-label">{t.label}</span>
+        </button>
+      ))}
+      <div className="rail-spacer" />
+      <button className="rail-item" onClick={() => navigate('/profile')}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#3d86f5,#1f6feb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff' }}>
+          {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+        </div>
+        <span className="rail-item-label">Profil</span>
+      </button>
+    </nav>
   )
 }
 
@@ -1555,77 +1566,107 @@ function AiChat({ tripId, destination }) {
 }
 
 /* ============ PAGE ============ */
-const TABS = [
-  { value: 'itinerary', label: 'Itinerary' }, { value: 'expenses', label: 'Expenses' },
-  { value: 'members', label: 'Members' }, { value: 'chat', label: 'Chat' },
-  { value: 'ai', label: '✨ AI' },
-]
+function formatDateRangeShort(start, end) {
+  if (!start) return ''
+  const opts = { month: 'short', day: 'numeric' }
+  const s = new Date(start).toLocaleDateString('ro-RO', opts)
+  if (!end) return s
+  const e = new Date(end).toLocaleDateString('ro-RO', { ...opts, year: 'numeric' })
+  return `${s} – ${e}`
+}
 
 function TripDetail() {
   const { tripId } = useParams()
   const dispatch = useDispatch()
-  const user = useSelector((state) => state.auth.user)
-  const { current: trip, currentStatus: status, currentError: error } = useSelector((state) => state.trips)
+  const navigate = useNavigate()
+  const user = useSelector(s => s.auth.user)
+  const { current: trip, currentStatus: status, currentError: error } = useSelector(s => s.trips)
   const [tab, setTab] = useState('itinerary')
 
-  useEffect(() => {
-    dispatch(fetchTripById(tripId))
-  }, [dispatch, tripId])
+  useEffect(() => { dispatch(fetchTripById(tripId)) }, [dispatch, tripId])
 
-  if (status === 'failed' || (status === 'succeeded' && !trip)) {
+  if (!trip && status !== 'loading') {
     return (
-      <div className="ts-root">
-        <TopBar user={user} />
-        <main className="app-wrap app-wrap-wide" style={{ padding: '20px 24px 80px' }}>
-          <Card style={{ textAlign: 'center', padding: 48 }}>
-            <h2>Trip not found</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
-              {error || "This trip doesn't exist or you don't have access to it."}
-            </p>
-            <Link to="/"><Button variant="secondary">Back to trips</Button></Link>
-          </Card>
-        </main>
-      </div>
+      <>
+        <AppRail user={user} activeTab={tab} onTabChange={setTab} />
+        <div className="app-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>😕</div>
+            <div style={{ font: '800 20px/1 Archivo, sans-serif', color: 'var(--ink)', marginBottom: 8 }}>Călătoria nu a fost găsită</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>{error || 'Nu ai acces la această călătorie.'}</div>
+            <button className="btn-secondary" onClick={() => navigate('/')}>← Înapoi la călătorii</button>
+          </div>
+        </div>
+      </>
     )
   }
 
   if (!trip) {
     return (
-      <div className="ts-root">
-        <TopBar user={user} />
-        <main className="app-wrap app-wrap-wide" style={{ padding: '20px 24px 80px' }}>
-          <p>Loading trip…</p>
-        </main>
-      </div>
+      <>
+        <AppRail user={user} activeTab={tab} onTabChange={setTab} />
+        <div className="app-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-muted)', fontSize: 14 }}>
+          Se încarcă…
+        </div>
+      </>
     )
   }
 
-  const currentMember = trip.members.find((m) => m.email === user?.email)
+  const currentMember = trip.members.find(m => m.email === user?.email)
   const isAdmin = currentMember?.role === 'Admin'
   const currentUserId = currentMember?.userId
-  const people = trip.members.map((m) => ({ name: m.name, src: m.avatarUrl }))
+  const phase = tripPhase(trip.startDate, trip.endDate)
+
+  const tabLabels = {
+    itinerary: 'PLAN',
+    expenses: 'BANI',
+    chat: 'CHAT',
+    members: 'PRIETENI',
+    ai: '✨ AI',
+  }
 
   return (
-    <div className="ts-root">
-      <TopBar tripTitle={trip.title} user={user} />
-      <main className="app-wrap app-wrap-wide" style={{ padding: '20px 24px 80px' }}>
-        <TripCover
-          title={trip.title} location={trip.destination} dates={formatDateRange(trip.startDate, trip.endDate)}
-          people={people} gradient="sky" status={tripPhase(trip.startDate, trip.endDate)} height={224}
-          style={{ marginBottom: 18 }}
-        />
+    <>
+      <AppRail user={user} activeTab={tab} onTabChange={setTab} />
+      <div className="app-content">
+        {/* ---- Workspace header ---- */}
+        <div className="workspace-header">
+          <div className="workspace-breadcrumb">
+            <Link to="/" style={{ color: 'inherit' }}>Călătorii</Link>
+            {' / '}
+            {trip.destination}
+          </div>
+          <div className="workspace-title">{trip.title}</div>
+          <div className="workspace-meta">
+            <span className="workspace-meta-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {formatDateRangeShort(trip.startDate, trip.endDate)}
+            </span>
+            <span className="workspace-meta-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              {trip.members?.length || 0} membri
+            </span>
+            <span className="workspace-meta-item" style={{ color: phase === 'active' ? 'var(--teal-700)' : phase === 'completed' ? 'var(--text-faint)' : 'var(--blue-700)' }}>
+              {phase === 'active' ? '● ÎN DESFĂȘURARE' : phase === 'upcoming' ? '↑ VIITOARE' : '✓ ÎNCHEIATĂ'}
+            </span>
+          </div>
 
-        <div className="flex items-center g4 wrap-wrap" style={{ position: 'sticky', top: 64, zIndex: 30, background: 'var(--surface-canvas)', padding: '10px 0 14px' }}>
-          <div style={{ flex: 1, minWidth: 280, maxWidth: 460 }}>
-            <SegmentedControl options={TABS} value={tab} onChange={setTab} />
+          {/* Tab bar */}
+          <div className="tab-bar">
+            {Object.entries(tabLabels).map(([value, label]) => (
+              <button key={value} className={`tab-item ${tab === value ? 'active' : ''}`} onClick={() => setTab(value)}>
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="panel-in" key={tab} style={{ marginTop: 6 }}>
+        {/* ---- Tab content ---- */}
+        <div key={tab}>
           {tab === 'itinerary' && (
             <Itinerary
-              tripId={trip.id} tripStartDate={trip.startDate} tripEndDate={trip.endDate} members={trip.members}
-              currentUserEmail={user?.email} isAdmin={isAdmin}
+              tripId={trip.id} tripStartDate={trip.startDate} tripEndDate={trip.endDate}
+              members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin}
             />
           )}
           {tab === 'expenses' && (
@@ -1634,11 +1675,11 @@ function TripDetail() {
           {tab === 'members' && (
             <Members members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin} tripId={trip.id} />
           )}
-          {tab === 'chat' && <Chat tripId={trip.id} currentUserId={currentUserId} />}
+          {tab === 'chat' && <Chat tripId={trip.id} currentUserId={currentUserId} members={trip.members} />}
           {tab === 'ai' && <AiChat tripId={trip.id} destination={trip.destination} />}
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   )
 }
 
