@@ -20,6 +20,7 @@ import {
   fetchDocuments, addDocument, deleteDocument,
 } from '../../features/group/groupSlice'
 import { apiRequest } from '../../api/client'
+import { API_ORIGIN } from '../../api/config'
 import '../../styles/ds/index.css'
 import '../../styles/trip-detail.css'
 
@@ -58,7 +59,7 @@ function ProfileModal({ open, onClose }) {
   useEffect(() => {
     if (!open) return
     setSaved(false)
-    fetch(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'}/api/users/me`, {
+    fetch(`${API_ORIGIN}/api/users/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
@@ -67,7 +68,7 @@ function ProfileModal({ open, onClose }) {
 
   const handleSave = async () => {
     setSaving(true)
-    await fetch(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'}/api/users/me`, {
+    await fetch(`${API_ORIGIN}/api/users/me`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name, paymentLink }),
@@ -1336,7 +1337,7 @@ function Chat({ tripId, currentUserId, members }) {
     dispatch(fetchProposals(tripId))
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`https://localhost:7213/hubs/chat`, { accessTokenFactory: () => token })
+      .withUrl(`${API_ORIGIN}/hubs/chat`, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
       .configureLogging(signalR.LogLevel.Warning)
       .build()
@@ -2466,7 +2467,7 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'}/api/trips/${tripId}/ai/chat`,
+        `${API_ORIGIN}/api/trips/${tripId}/ai/chat`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

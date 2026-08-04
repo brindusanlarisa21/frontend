@@ -7,7 +7,7 @@ import { logout } from '../features/auth/authSlice'
 import '../styles/ds/index.css'
 import '../styles/trip-detail.css'
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://localhost:7213'
+import { API_ORIGIN as API_BASE } from '../api/config'
 
 function AppRail({ user }) {
   const navigate = useNavigate()

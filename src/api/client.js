@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_URL
+import { API_BASE } from './config'
+
+const BASE_URL = API_BASE
 
 export async function apiRequest(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' }
