@@ -6,7 +6,7 @@ import { fetchTrips, createTrip, clearTripsError } from '../features/trips/trips
 import { fetchActivities } from '../features/activities/activitiesSlice'
 import { fetchExpenses, fetchBalances } from '../features/expenses/expensesSlice'
 import { fetchProposals } from '../features/proposals/proposalsSlice'
-import { fetchChecklist, fetchDocuments } from '../features/group/groupSlice'
+import { fetchChecklist, fetchDocuments, previewInvite, joinByInvite } from '../features/group/groupSlice'
 import '../styles/ds/index.css'
 import '../styles/trip-detail.css'
 
@@ -168,6 +168,109 @@ function CreateTripModal({ open, onClose, onCreate, submitting, error }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+/** Join a trip from an invite code or a pasted invite link. */
+function JoinByCodeModal({ open, onClose }) {
+  const dispatch = useDispatch()
+  const navigate = useNavigate()
+  const [code, setCode] = useState('')
+  const [preview, setPreview] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  if (!open) return null
+
+  // Accept a bare code, a dashed code, or the whole invite URL.
+  const normalize = (raw) => {
+    const trimmed = raw.trim()
+    const fromUrl = trimmed.match(/\/invite\/([^/?#\s]+)/i)
+    return (fromUrl ? fromUrl[1] : trimmed).replace(/[-\s]/g, '').toUpperCase()
+  }
+
+  const close = () => {
+    setCode(''); setPreview(null); setError(null)
+    onClose()
+  }
+
+  const handleCheck = async (e) => {
+    e.preventDefault()
+    const token = normalize(code)
+    if (!token) return
+    setBusy(true); setError(null)
+    const result = await dispatch(previewInvite(token))
+    setBusy(false)
+    if (previewInvite.fulfilled.match(result)) setPreview({ ...result.payload, token })
+    else setError(result.payload || 'Codul nu este valid.')
+  }
+
+  const handleJoin = async () => {
+    setBusy(true); setError(null)
+    const result = await dispatch(joinByInvite(preview.token))
+    setBusy(false)
+    if (joinByInvite.fulfilled.match(result)) {
+      await dispatch(fetchTrips())
+      close()
+      navigate(`/trips/${result.payload.tripId}`)
+    } else {
+      setError(result.payload || 'Nu te-am putut adăuga în călătorie.')
+    }
+  }
+
+  const fmt = (d) => new Date(d).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' })
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && close()}>
+      <div className="modal-box" style={{ maxWidth: 440 }}>
+        <div className="modal-header">
+          <span className="modal-title">Intră cu un cod</span>
+          <button onClick={close} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+        </div>
+
+        {preview ? (
+          <>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ font: '400 14px/1.6 Archivo, sans-serif', color: 'var(--text-body)' }}>
+                <b>{preview.invitedByName}</b> te invită în <b>{preview.tripTitle}</b> — {preview.destination},{' '}
+                {fmt(preview.startDate)}–{fmt(preview.endDate)}. Sunteți deja {preview.memberCount}{' '}
+                {preview.memberCount === 1 ? 'persoană' : 'persoane'}.
+              </div>
+              {error && <div className="auth-error"><span>⚠</span> {error}</div>}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => { setPreview(null); setError(null) }}>Alt cod</button>
+              <button type="button" className="btn-primary" onClick={handleJoin} disabled={busy}>
+                {busy ? 'Se procesează…' : 'Intră în călătorie'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleCheck}>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="input-label">Cod sau link de invitație</label>
+                <input
+                  className="input-field" autoFocus placeholder="ex. ABCD-2345"
+                  value={code} onChange={e => setCode(e.target.value)} required
+                  style={{ letterSpacing: '.06em' }}
+                />
+              </div>
+              <div style={{ font: '400 12px/1.5 Archivo, sans-serif', color: 'var(--text-muted)' }}>
+                Codul îl găsești în tabul Prieteni al călătoriei, la cine te-a invitat.
+              </div>
+              {error && <div className="auth-error"><span>⚠</span> {error}</div>}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={close}>Anulează</button>
+              <button type="submit" className="btn-primary" disabled={busy || !code.trim()}>
+                {busy ? 'Se verifică…' : 'Verifică codul'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   )
@@ -410,6 +513,7 @@ function Home() {
   const user = useSelector(s => s.auth.user)
   const { items: trips, status, error } = useSelector(s => s.trips)
   const [modalOpen, setModalOpen] = useState(false)
+  const [joinOpen, setJoinOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
 
@@ -456,7 +560,7 @@ function Home() {
             </h1>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-            <button className="btn-secondary" style={{ gap: 7, display: 'flex', alignItems: 'center' }}>
+            <button className="btn-secondary" onClick={() => setJoinOpen(true)} style={{ gap: 7, display: 'flex', alignItems: 'center' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
               Intră cu un cod
             </button>
@@ -491,7 +595,10 @@ function Home() {
             <div style={{ fontSize: 40, marginBottom: 18 }}>🌍</div>
             <div style={{ font: '800 20px/1 Archivo, sans-serif', color: 'var(--ink)', marginBottom: 8 }}>Nicio călătorie încă</div>
             <div style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>Creează prima ta călătorie sau intră cu un cod de invitație.</div>
-            <button className="btn-primary" onClick={() => setModalOpen(true)}>+ Călătorie nouă</button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button className="btn-primary" onClick={() => setModalOpen(true)}>+ Călătorie nouă</button>
+              <button className="btn-secondary" onClick={() => setJoinOpen(true)}>Intră cu un cod</button>
+            </div>
           </div>
         )}
 
@@ -557,6 +664,7 @@ function Home() {
       </div>
 
       <CreateTripModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} submitting={creating} error={error} />
+      <JoinByCodeModal open={joinOpen} onClose={() => setJoinOpen(false)} />
     </>
   )
 }
