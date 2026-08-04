@@ -439,7 +439,7 @@ function Home() {
   return (
     <>
       <AppRail user={user} onLogout={handleLogout} />
-      <div className="app-content" style={{ padding: '32px 36px 60px', maxWidth: 1200 }}>
+      <div className="app-content" style={{ padding: '32px 36px 60px' }}>
 
         {/* ---- Header ---- */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>

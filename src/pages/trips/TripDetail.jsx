@@ -321,33 +321,43 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
 
   // Horizontal day strip: arrows page through days when they overflow.
   const dayStripRef = useRef(null)
-  const [dayScroll, setDayScroll] = useState({ atStart: true, atEnd: true })
-
-  const syncDayScroll = () => {
-    const el = dayStripRef.current
-    if (!el) return
-    setDayScroll({
-      atStart: el.scrollLeft <= 1,
-      atEnd: el.scrollLeft + el.clientWidth >= el.scrollWidth - 1,
-    })
-  }
+  const [dayScroll, setDayScroll] = useState({ overflows: false, atStart: true, atEnd: false })
 
   useEffect(() => {
-    syncDayScroll()
     const el = dayStripRef.current
     if (!el) return
-    el.addEventListener('scroll', syncDayScroll, { passive: true })
-    window.addEventListener('resize', syncDayScroll)
+
+    const sync = () => {
+      const overflows = el.scrollWidth > el.clientWidth + 1
+      setDayScroll({
+        overflows,
+        atStart: el.scrollLeft <= 1,
+        atEnd: el.scrollLeft + el.clientWidth >= el.scrollWidth - 1,
+      })
+    }
+
+    sync()
+    el.addEventListener('scroll', sync, { passive: true })
+    // The strip's width depends on the panel split, not just the window.
+    const observer = new ResizeObserver(sync)
+    observer.observe(el)
     return () => {
-      el.removeEventListener('scroll', syncDayScroll)
-      window.removeEventListener('resize', syncDayScroll)
+      el.removeEventListener('scroll', sync)
+      observer.disconnect()
     }
   }, [dayRange.length])
 
   const scrollDays = (dir) => {
     const el = dayStripRef.current
-    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' })
+    if (el) el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.8, 120), behavior: 'smooth' })
   }
+
+  // Keep the chosen day visible when it sits outside the current window.
+  useEffect(() => {
+    const el = dayStripRef.current
+    if (!el) return
+    el.querySelector('.day-pill.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+  }, [selectedDay])
 
   const handleAdd = async (activity) => {
     dispatch(clearActivityActionError())
@@ -374,9 +384,11 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
       <div style={{ borderRight: '2px solid var(--border-strong)' }}>
         {/* Day pills */}
         <div className="day-picker-wrap">
+          {dayScroll.overflows && (
           <button className="day-nav" onClick={() => scrollDays(-1)} disabled={dayScroll.atStart} aria-label="Zilele anterioare">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
+          )}
           <div className="day-picker" ref={dayStripRef}>
           {dayRange.map((key) => {
             const { weekday, day } = formatDayPill(key)
@@ -394,9 +406,11 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
             )
           })}
           </div>
+          {dayScroll.overflows && (
           <button className="day-nav" onClick={() => scrollDays(1)} disabled={dayScroll.atEnd} aria-label="Zilele următoare">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
+          )}
         </div>
 
         {/* Day heading */}
@@ -1199,7 +1213,9 @@ function ProposalForm({ tripId, onClose }) {
   )
 }
 
-const PROPOSAL_CAT_LABELS = ['Mâncare', 'Obiectiv', 'Cazare', 'Drum', 'Distracție']
+// Order must match the backend ActivityCategory enum — the index is sent as the category.
+const PROPOSAL_CAT_LABELS = ['Obiectiv', 'Mâncare', 'Cazare', 'Drum', 'Distracție', 'Transport']
+const ACTIVITY_CAT_ORDER = ['sight', 'food', 'stay', 'travel', 'fun', 'transit']
 
 function Chat({ tripId, currentUserId, members }) {
   const dispatch = useDispatch()
@@ -1209,7 +1225,7 @@ function Chat({ tripId, currentUserId, members }) {
   const [text, setText] = useState('')
   const [connected, setConnected] = useState(false)
   const connectionRef = useRef(null)
-  const bottomRef = useRef(null)
+  const feedRef = useRef(null)
 
   // Proposal form state (right panel)
   const [propForm, setPropForm] = useState({ title: '', location: '', startDate: '', startTime: '', endTime: '', category: 0, cost: '' })
@@ -1245,8 +1261,6 @@ function Chat({ tripId, currentUserId, members }) {
     return () => { cancelled = true; setConnected(false); connection.stop(); dispatch(clearMessages()); dispatch(clearProposals()) }
   }, [tripId, token, dispatch])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
-
   const handleSend = async () => {
     const trimmed = text.trim()
     if (!trimmed || !connectionRef.current || !connected) return
@@ -1281,15 +1295,22 @@ function Chat({ tripId, currentUserId, members }) {
     ...proposals.map((p) => ({ ...p, _type: 'proposal', _time: new Date(p.createdAt) })),
   ].sort((a, b) => a._time - b._time)
 
+  // Pin the feed to the newest entry — proposals count too, not just messages.
+  useEffect(() => {
+    const el = feedRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [feed.length])
+
   const MEMBER_COLORS = ['#1f6feb','#0f9b8e','#ff7a45','#7c3aed','#e2564a','#0b6f66']
   const memberColor = (name) => MEMBER_COLORS[(name?.charCodeAt(0) ?? 0) % MEMBER_COLORS.length]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', minHeight: '80vh' }}>
-      {/* ---- Chat feed ---- */}
-      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '2px solid var(--border-strong)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', height: '78vh', minHeight: 0 }}>
+      {/* ---- Chat feed — only the messages scroll, so the composer stays put ---- */}
+      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '2px solid var(--border-strong)', minHeight: 0 }}>
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: '60vh' }}>
+        <div ref={feedRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {status === 'loading' && <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Se încarcă…</div>}
           {feed.length === 0 && status === 'succeeded' && (
             <div style={{ textAlign: 'center', marginTop: 40, color: 'var(--text-muted)', fontSize: 14 }}>Niciun mesaj. Fii primul!</div>
@@ -1353,7 +1374,7 @@ function Chat({ tripId, currentUserId, members }) {
               </div>
             )
           })}
-          <div ref={bottomRef} />
+
         </div>
 
         {/* Input bar */}
@@ -1376,7 +1397,7 @@ function Chat({ tripId, currentUserId, members }) {
       </div>
 
       {/* ---- Right panel: proposal form ---- */}
-      <div style={{ padding: '20px 18px', borderLeft: '1px solid var(--border)' }}>
+      <div style={{ padding: '20px 18px', borderLeft: '1px solid var(--border)', minHeight: 0, overflowY: 'auto' }}>
         <div className="kicker" style={{ marginBottom: 16 }}>Propunere nouă</div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1926,21 +1947,395 @@ const QUICK_PROMPTS = [
   { icon: '🌧', text: 'Ce fac dacă plouă?' },
 ]
 
+/**
+ * The assistant appends a ```plan JSON block when its answer contains a concrete
+ * schedule. Pull it out so the prose renders clean and the items become actions.
+ */
+function extractAiPlan(reply) {
+  const match = reply?.match(/```plan\s*([\s\S]*?)```/i)
+  if (!match) return { text: reply, plan: null }
+
+  const text = reply.replace(match[0], '').trim()
+  try {
+    const parsed = JSON.parse(match[1].trim())
+    const cleanItems = (list) =>
+      Array.isArray(list) ? list.filter((i) => i?.title && i?.time) : []
+
+    const topLevelItems = cleanItems(parsed.items)
+
+    const tiers = (Array.isArray(parsed.tiers) ? parsed.tiers : [])
+      .filter((t) => t?.level && t?.amount != null)
+      .map((t) => ({
+        level: String(t.level).toLowerCase(),
+        amount: t.amount,
+        summary: t.summary,
+        items: cleanItems(t.items),
+      }))
+
+    const perTier = tiers.filter((t) => t.items.length > 0)
+
+    // Every tier brought its own schedule — picking one swaps the plan below.
+    if (perTier.length === tiers.length && perTier.length > 0) {
+      return { text, plan: { day: parsed.day, tiers: perTier, perTierItems: true } }
+    }
+
+    if (topLevelItems.length === 0) {
+      return perTier.length > 0
+        ? { text, plan: { day: parsed.day, tiers: perTier, perTierItems: true } }
+        : { text, plan: null }
+    }
+
+    // Older replies carried one shared schedule; show the tiers as prices only.
+    return {
+      text,
+      plan: { day: parsed.day, tiers, items: topLevelItems, perTierItems: false },
+    }
+  } catch {
+    // A malformed block should never break the answer.
+    return { text, plan: null }
+  }
+}
+
+const TIER_UI = {
+  economic: { label: 'Economic', accent: 'var(--teal-700)', border: 'var(--border)' },
+  mediu:    { label: 'Mediu · Recomandat', accent: 'var(--blue-700)', border: 'var(--blue-500)' },
+  premium:  { label: 'Premium', accent: 'var(--orange-500)', border: 'rgba(255,122,69,.45)' },
+}
+
+function AiTierCards({ tiers, currency, selected, onSelect }) {
+  const selectable = typeof onSelect === 'function'
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${tiers.length}, 1fr)`, gap: 12, marginLeft: 42, marginTop: 4 }}>
+      {tiers.map((t) => {
+        const ui = TIER_UI[t.level] || TIER_UI.economic
+        // Without per-tier schedules there is nothing to switch, so highlight the
+        // recommended one instead of pretending the cards are a picker.
+        const active = selectable ? t.level === selected : t.level === 'mediu'
+        return (
+          <button
+            key={t.level}
+            type="button"
+            disabled={!selectable}
+            onClick={selectable ? () => onSelect(t.level) : undefined}
+            aria-pressed={selectable ? active : undefined}
+            style={{
+              textAlign: 'left', cursor: selectable ? 'pointer' : 'default',
+              padding: '14px 16px', borderRadius: 'var(--r-lg)',
+              border: `${active ? 2 : 1}px solid ${active ? ui.border : 'var(--border)'}`,
+              background: active ? 'var(--surface-solid)' : 'rgba(255,255,255,.55)',
+              boxShadow: active ? '0 6px 18px rgba(11,26,48,.10)' : 'none',
+              transition: 'all 140ms',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ font: '800 9.5px/1 Archivo, sans-serif', letterSpacing: '.1em', textTransform: 'uppercase', color: active ? ui.accent : 'var(--text-muted)' }}>
+                {ui.label}
+              </span>
+              {active && selectable && <span style={{ color: ui.accent, font: '800 11px/1 Archivo, sans-serif' }}>✓</span>}
+            </div>
+            <div style={{ font: '800 26px/1 Archivo, sans-serif', letterSpacing: '-0.02em', color: active ? 'var(--ink)' : 'var(--text-body)', fontVariantNumeric: 'tabular-nums', marginBottom: 10 }}>
+              {t.amount} {currency}
+            </div>
+            {t.summary && (
+              <div style={{ font: '400 12px/1.5 Archivo, sans-serif', color: 'var(--text-muted)' }}>{t.summary}</div>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Tier picker plus the schedule for whichever tier is chosen. The two buttons
+ * always act on the tier currently selected.
+ */
+function AiPlanBlock({ plan, currency, dayRange, onAdd, onPropose, busy, done }) {
+  const tiers = plan.tiers ?? []
+  const selectable = plan.perTierItems === true
+  const [selected, setSelected] = useState(() => {
+    if (tiers.length === 0) return null
+    return (tiers.find((t) => t.level === 'mediu') ?? tiers[0]).level
+  })
+
+  const activeTier = selectable ? tiers.find((t) => t.level === selected) ?? null : null
+  const items = activeTier?.items ?? plan.items ?? []
+  if (items.length === 0) return null
+
+  return (
+    <>
+      {tiers.length > 0 && (
+        <AiTierCards
+          tiers={tiers} currency={currency}
+          selected={selectable ? selected : null}
+          onSelect={selectable ? setSelected : null}
+        />
+      )}
+      <AiPlanCard
+        key={selected}
+        items={items}
+        tierLabel={activeTier ? TIER_UI[activeTier.level]?.label : null}
+        planDay={plan.day}
+        currency={currency}
+        dayRange={dayRange}
+        busy={busy}
+        done={done?.[selected ?? 'default']}
+        onAdd={(day) => onAdd(items, day, selected ?? 'default')}
+        onPropose={(day) => onPropose(items, day, selected ?? 'default')}
+      />
+    </>
+  )
+}
+
+/** Day picker that always opens downward — a native select flips up near the bottom. */
+function DayDropdown({ value, options, onChange, format }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e) => {
+      if (!wrapRef.current?.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          height: 32, padding: '0 10px 0 12px',
+          borderRadius: 999,
+          border: `1.5px solid ${open ? 'var(--blue-500)' : 'var(--border)'}`,
+          background: 'var(--surface-solid)',
+          font: '800 12px/1 Archivo, sans-serif',
+          color: 'var(--ink)',
+          cursor: 'pointer',
+          transition: 'border-color 120ms',
+        }}
+      >
+        {format(value)}
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 140ms' }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20,
+            minWidth: 200, maxHeight: 240, overflowY: 'auto',
+            background: 'var(--surface-solid)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: '0 12px 32px rgba(11,26,48,.16)',
+            padding: 5,
+          }}
+        >
+          {options.map((opt) => {
+            const active = opt === value
+            return (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => { onChange(opt); setOpen(false) }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                  width: '100%', textAlign: 'left',
+                  padding: '8px 10px', borderRadius: 'var(--r-sm)', border: 'none',
+                  background: active ? 'var(--blue-tint)' : 'transparent',
+                  font: `${active ? 800 : 400} 12.5px/1.2 Archivo, sans-serif`,
+                  color: active ? 'var(--blue-700)' : 'var(--text-body)',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--bg)' }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent' }}
+              >
+                {format(opt)}
+                {active && <span>✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AiPlanCard({ items, tierLabel, planDay, currency, dayRange, onAdd, onPropose, busy, done }) {
+  const [day, setDay] = useState(() => (dayRange.includes(planDay) ? planDay : dayRange[0]))
+  const total = items.reduce((s, i) => s + (i.cost || 0), 0)
+
+  const dayLabel = (key) =>
+    new Date(`${key}T00:00:00`).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' })
+
+  return (
+    <div style={{ background: 'rgba(31,111,235,.045)', border: '1.5px solid rgba(31,111,235,.22)', borderRadius: 'var(--r-lg)', padding: '16px 18px', marginTop: 12, marginLeft: 42 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+        <div className="kicker" style={{ color: 'var(--blue-700)' }}>
+          Ce adaug în plan{tierLabel ? `, varianta ${tierLabel.split(' · ')[0].toLowerCase()}` : ''}
+        </div>
+        <DayDropdown value={day} options={dayRange} onChange={setDay} format={dayLabel} />
+      </div>
+
+      {items.map((item, i) => {
+        const cat = CAT_UI[item.category?.toLowerCase()] || CAT_UI.sight
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 14, padding: '8px 0' }}>
+            <span style={{ font: '800 13px/1.4 Archivo, sans-serif', color: 'var(--ink)', width: 46, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+              {item.time}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, font: '400 13px/1.4 Archivo, sans-serif', color: 'var(--blue-700)' }}>
+              {item.title}
+              {item.location && <span style={{ color: 'var(--text-muted)' }}> · {item.location}</span>}
+              {item.durationMin && <span style={{ color: 'var(--text-muted)' }}> · {item.durationMin >= 60 ? `${Math.round(item.durationMin / 60)} h` : `${item.durationMin}′`}</span>}
+              {item.cost != null && <span style={{ color: cat.color, fontWeight: 800 }}> · {item.cost} {currency}</span>}
+            </span>
+          </div>
+        )
+      })}
+
+      {total > 0 && (
+        <div style={{ font: '400 11.5px/1 Archivo, sans-serif', color: 'var(--text-muted)', marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(31,111,235,.15)' }}>
+          Total estimat: <b style={{ color: 'var(--ink)' }}>{total} {currency}</b> / persoană
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button className="btn-primary" style={{ fontSize: 13 }} disabled={busy || done === 'added'} onClick={() => onAdd(day)}>
+          {done === 'added' ? '✓ Adăugat în plan' : busy ? 'Se adaugă…' : 'Adaugă în plan'}
+        </button>
+        <button className="btn-secondary" style={{ fontSize: 13 }} disabled={busy || done === 'proposed'} onClick={() => onPropose(day)}>
+          {done === 'proposed' ? '✓ Trimis la vot' : 'Trimite la vot în chat'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AiChat({ tripId, destination, members, startDate, endDate, budget, currency = 'EUR', expenses }) {
   const { token } = useSelector((s) => s.auth)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [lastTiers, setLastTiers] = useState(null) // { eco, mid, prem, details }
-  const bottomRef = useRef(null)
+  const [planBusy, setPlanBusy] = useState(false)
+  const [planDone, setPlanDone] = useState({}) // message index -> 'added' | 'proposed'
+  const feedRef = useRef(null)
+  const dispatch = useDispatch()
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  const dayRange = buildDayRange(startDate, endDate)
+
+  // Restore the stored thread so the conversation survives reloads and tab switches.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const history = await apiRequest(`/trips/${tripId}/ai/messages`, { token })
+        if (cancelled || !Array.isArray(history)) return
+        setMessages(history.map((m) => {
+          if (m.role !== 'assistant') return { role: m.role, content: m.content }
+          const { text, plan } = extractAiPlan(m.content)
+          return { role: 'assistant', content: text, plan }
+        }))
+      } catch {
+        // An unreachable history endpoint should still leave a usable chat.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [tripId, token])
+
+  const clearHistory = async () => {
+    try {
+      await apiRequest(`/trips/${tripId}/ai/messages`, { method: 'DELETE', token })
+      setMessages([])
+      setPlanDone({})
+    } catch { /* ignore */ }
+  }
+
+  // Pin the feed to the newest message. Scrolling the container (not a sentinel)
+  // keeps the page itself still.
+  useEffect(() => {
+    const el = feedRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [messages])
+
+  const planItemPayload = (item, day) => {
+    const start = new Date(`${day}T${item.time}`)
+    const end = item.durationMin ? new Date(start.getTime() + item.durationMin * 60000) : null
+    return { start, end }
+  }
+
+  const markDone = (msgIndex, tier, state) =>
+    setPlanDone((prev) => ({ ...prev, [msgIndex]: { ...prev[msgIndex], [tier]: state } }))
+
+  const addPlanToItinerary = async (items, day, tier, msgIndex) => {
+    setPlanBusy(true)
+    for (const item of items) {
+      const { start, end } = planItemPayload(item, day)
+      await dispatch(createActivity({
+        tripId,
+        activity: {
+          title: item.title,
+          description: null,
+          category: item.category?.toLowerCase() || 'sight',
+          cost: item.cost ?? null,
+          startTime: start.toISOString(),
+          endTime: end ? end.toISOString() : null,
+          location: item.location ?? null,
+          latitude: null,
+          longitude: null,
+        },
+      }))
+    }
+    setPlanBusy(false)
+    markDone(msgIndex, tier, 'added')
+  }
+
+  const sendPlanToVote = async (items, day, tier, msgIndex) => {
+    setPlanBusy(true)
+    for (const item of items) {
+      const { start, end } = planItemPayload(item, day)
+      const categoryIndex = Math.max(0, ACTIVITY_CAT_ORDER.indexOf(item.category?.toLowerCase()))
+      await dispatch(createProposal({
+        tripId,
+        proposal: {
+          title: item.title,
+          description: null,
+          location: item.location ?? null,
+          startTime: start.toISOString(),
+          endTime: end ? end.toISOString() : null,
+          category: categoryIndex,
+          cost: item.cost ?? null,
+        },
+      }))
+    }
+    setPlanBusy(false)
+    markDone(msgIndex, tier, 'proposed')
+  }
 
   const send = async (text) => {
     const msg = (text ?? input).trim()
     if (!msg || loading) return
     setInput('')
-    setLastTiers(null)
 
     const userMsg = { role: 'user', content: msg }
     setMessages(prev => [...prev, userMsg, { role: 'assistant', content: null, loading: true }])
@@ -1952,19 +2347,14 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ message: msg, history: messages.map(m => ({ role: m.role, content: m.content || '' })) }),
+          body: JSON.stringify({ message: msg }),
         }
       )
       const data = await res.json()
       const reply = data.reply ?? data.message ?? 'Eroare la răspuns.'
 
-      // Try to extract budget tiers from response
-      const tierMatch = reply.match(/economic[^\n]*(\d+)\s*€.*\n.*mediu[^\n]*(\d+)\s*€.*\n.*premium[^\n]*(\d+)\s*€/i)
-      if (tierMatch) {
-        setLastTiers({ eco: tierMatch[1], mid: tierMatch[2], prem: tierMatch[3] })
-      }
-
-      setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: reply, loading: false }])
+      const { text, plan } = extractAiPlan(reply)
+      setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: text, plan, loading: false }])
     } catch {
       setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: 'Eroare de conexiune. Încearcă din nou.', loading: false }])
     } finally {
@@ -1981,19 +2371,26 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
   const budgetLeft = budget != null && budget > 0 ? budget - totalSpent : null
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 460px', minHeight: '80vh' }}>
-      {/* ---- Main: chat ---- */}
-      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '2px solid var(--border-strong)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 460px', height: '78vh', minHeight: 0 }}>
+      {/* ---- Main: chat — only the feed scrolls, so the input stays put ---- */}
+      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '2px solid var(--border-strong)', minHeight: 0 }}>
         {/* Header */}
         <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid var(--border)' }}>
           <div className="kicker" style={{ marginBottom: 6 }}>Asistent · {destination}{startDate ? `, ${new Date(startDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}–${new Date(endDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}` : ''}{members?.length ? `, ${members.length} persoane` : ''}</div>
-          <h2 style={{ font: '800 28px/1.1 Archivo, sans-serif', letterSpacing: '-0.025em', color: 'var(--ink)', margin: 0 }}>
-            Ce vrei să pun la cale?
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <h2 style={{ font: '800 28px/1.1 Archivo, sans-serif', letterSpacing: '-0.025em', color: 'var(--ink)', margin: 0 }}>
+              Ce vrei să pun la cale?
+            </h2>
+            {messages.length > 0 && (
+              <button className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px', flexShrink: 0 }} onClick={clearHistory}>
+                Șterge conversația
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Feed */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12, minHeight: '40vh' }}>
+        <div ref={feedRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.map((msg, i) => {
             const isUser = msg.role === 'user'
             if (msg.loading) {
@@ -2007,7 +2404,8 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
               )
             }
             return (
-              <div key={i} style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', gap: 10 }}>
+              <Fragment key={i}>
+              <div style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', gap: 10 }}>
                 {!isUser && <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--blue-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>✨</div>}
                 <div style={{
                   maxWidth: '75%',
@@ -2021,33 +2419,20 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
                   <span dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }} />
                 </div>
               </div>
+
+              {msg.plan && dayRange.length > 0 && (
+                <AiPlanBlock
+                  plan={msg.plan} currency={currency} dayRange={dayRange}
+                  busy={planBusy} done={planDone[i]}
+                  onAdd={(items, day, tier) => addPlanToItinerary(items, day, tier, i)}
+                  onPropose={(items, day, tier) => sendPlanToVote(items, day, tier, i)}
+                />
+              )}
+              </Fragment>
             )
           })}
 
-          {/* Budget tiers when detected */}
-          {lastTiers && (
-            <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 16px', marginTop: 4 }}>
-              <div className="kicker" style={{ marginBottom: 12, color: 'var(--blue-700)' }}>Ce adaug în plan, varianta medie</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
-                {[
-                  { label: 'Economic', amount: lastTiers.eco, border: 'var(--border)', accent: 'var(--text-muted)' },
-                  { label: 'Mediu · Recomandat', amount: lastTiers.mid, border: 'var(--blue-500)', accent: 'var(--blue-700)' },
-                  { label: 'Premium', amount: lastTiers.prem, border: 'rgba(255,122,69,.5)', accent: 'var(--orange-500)' },
-                ].map((t, idx) => (
-                  <div key={idx} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `2px solid ${t.border}`, background: 'var(--surface-solid)' }}>
-                    <div style={{ font: `800 9px/1 Archivo, sans-serif`, letterSpacing: '.1em', textTransform: 'uppercase', color: t.accent, marginBottom: 6 }}>{t.label}</div>
-                    <div style={{ font: '800 22px/1 Archivo, sans-serif', color: 'var(--ink)', fontVariantNumeric: 'tabular-nums' }}>{t.amount} €</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn-primary" style={{ fontSize: 12 }}>Adaugă toate în plan</button>
-                <button className="btn-secondary" style={{ fontSize: 12 }}>Trimite la vot în chat</button>
-              </div>
-            </div>
-          )}
 
-          <div ref={bottomRef} />
         </div>
 
         {/* Input */}
@@ -2067,7 +2452,7 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
       </div>
 
       {/* ---- Right panel: quick prompts + context ---- */}
-      <div style={{ padding: '24px 24px' }}>
+      <div style={{ padding: '24px 24px', minHeight: 0, overflowY: 'auto' }}>
         <div className="kicker" style={{ marginBottom: 14 }}>Întrebări rapide</div>
         {QUICK_PROMPTS.map((p) => (
           <button

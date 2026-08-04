@@ -99,6 +99,9 @@ input, textarea, select { font-family: inherit; }
 .app-content {
   margin-left: 92px;
   min-height: 100vh;
+  /* #root is a flex column — without this the page does not fill the viewport. */
+  flex: 1;
+  text-align: left;
 }
 
 /* ---- Trip workspace layout: content + right panel ---- */
@@ -241,6 +244,7 @@ input, textarea, select { font-family: inherit; }
   transition: all 140ms;
   white-space: nowrap;
   min-width: 58px;
+  flex-shrink: 0;
 }
 .day-pill:hover {
   border-color: var(--blue-300);
@@ -888,6 +892,10 @@ input, textarea, select { font-family: inherit; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 100vh;
+  /* #root is a flex column — stretch to fill it instead of hugging content. */
+  flex: 1;
+  width: 100%;
+  text-align: left;
 }
 @media (max-width: 700px) { .auth-layout { grid-template-columns: 1fr; } }
 
@@ -898,8 +906,14 @@ input, textarea, select { font-family: inherit; }
   flex-direction: column;
   min-height: 100vh;
 }
-.auth-panel-left-logo { margin-bottom: auto; }
-.auth-panel-left-content { margin-top: auto; }
+.auth-panel-left-logo { flex-shrink: 0; }
+/* Logo pinned top, the pitch centred in whatever height is left. */
+.auth-panel-left-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 .auth-panel-left-title {
   font: 800 46px/1.02 'Archivo', sans-serif;
   letter-spacing: -0.04em;
