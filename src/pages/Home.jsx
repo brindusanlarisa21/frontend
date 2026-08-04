@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
+import { House, Wallet, FileText, Sparkles } from 'lucide-react'
 import { logout } from '../features/auth/authSlice'
 import { fetchTrips, createTrip, clearTripsError } from '../features/trips/tripsSlice'
 import { fetchActivities } from '../features/activities/activitiesSlice'
@@ -46,46 +47,38 @@ function MiniAvatar({ name, size = 28, border = true }) {
   )
 }
 
-function AppRail({ user, onLogout }) {
+function AppRail({ user, onLogout, onAssistant }) {
   const navigate = useNavigate()
   return (
     <nav className="app-rail">
       <div className="rail-logo">
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
             <path d="M16 2C10.5 2 6 6.4 6 11.9 6 19.5 16 30 16 30V2Z" fill="#1f6feb" />
             <path d="M16 2c5.5 0 10 4.4 10 9.9C26 19.5 16 30 16 30V2Z" fill="#4f97ff" />
             <circle cx="16" cy="11.6" r="3.1" fill="#fff" />
           </svg>
+          <span className="rail-wordmark">TripSplit</span>
         </button>
       </div>
 
       <button className="rail-item active" onClick={() => navigate('/')}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.5 8 12 8 12s8-6.5 8-12a8 8 0 0 0-8-8z"/>
-        </svg>
-        <span className="rail-item-label">Călătorii</span>
+        <House size={21} strokeWidth={1.9} />
+        <span className="rail-item-label">Acasă</span>
       </button>
 
       <button className="rail-item" onClick={() => navigate('/')}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
+        <Wallet size={21} strokeWidth={1.9} />
         <span className="rail-item-label">Bani</span>
       </button>
 
       <button className="rail-item" onClick={() => navigate('/')}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-        </svg>
+        <FileText size={21} strokeWidth={1.9} />
         <span className="rail-item-label">Acte</span>
       </button>
 
-      <button className="rail-item" onClick={() => navigate('/')}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
-        </svg>
+      <button className="rail-item" onClick={onAssistant}>
+        <Sparkles size={21} strokeWidth={1.9} />
         <span className="rail-item-label">Asistent</span>
       </button>
 
@@ -516,6 +509,8 @@ function Home() {
   const [joinOpen, setJoinOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiTripId, setAiTripId] = useState('')
 
   useEffect(() => { dispatch(fetchTrips()) }, [dispatch])
 
@@ -542,14 +537,48 @@ function Home() {
 
   return (
     <>
-      <AppRail user={user} onLogout={handleLogout} />
-      <div className="app-content" style={{ padding: '32px 36px 60px' }}>
+      <AppRail
+        user={user} onLogout={handleLogout}
+        onAssistant={() => {
+          // Default to the trip you are most likely asking about.
+          setAiTripId(String(active?.id ?? nearest?.id ?? trips[0]?.id ?? ''))
+          setAiOpen(true)
+        }}
+      />
+      <div className="app-content home-content">
+
+        {/* ---- Countdown band: a page header on phones, not a card ---- */}
+        {(active || nearest) && (
+          <div className="mobile-only-block home-hero">
+            <div className="kicker" style={{ color: 'rgba(255,255,255,.55)', marginBottom: 6 }}>
+              {active ? 'În desfășurare' : 'Urmează'}
+            </div>
+            <div style={{ font: '800 22px/1.2 Archivo, sans-serif', letterSpacing: '-0.025em', color: '#fff', marginBottom: 5 }}>
+              {active
+                ? `Ești în ${active.destination}`
+                : daysLeft === 0
+                ? 'Plecați azi'
+                : `Mai ${daysLeft === 1 ? 'e' : 'sunt'} ${daysLeft} ${daysLeft === 1 ? 'zi' : 'zile'} până plecați`}
+            </div>
+            <div style={{ font: '400 12.5px/1.4 Archivo, sans-serif', color: 'rgba(255,255,255,.6)', marginBottom: 14 }}>
+              {(active ?? nearest).title} · {formatDateRange((active ?? nearest).startDate, (active ?? nearest).endDate)}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="hero-btn"
+                onClick={() => navigate(`/trips/${(active ?? nearest).id}`)}
+              >
+                Deschide călătoria
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ---- Header ---- */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
+        <div className="home-header">
+          <div className="hide-on-mobile">
             <div className="kicker" style={{ marginBottom: 8 }}>Bună, {firstName}</div>
-            <h1 style={{ font: '800 36px/1.1 Archivo, sans-serif', letterSpacing: '-0.03em', color: 'var(--ink)', margin: 0 }}>
+            <h1 className="home-greeting" style={{ letterSpacing: '-0.03em', color: 'var(--ink)', margin: 0 }}>
               {active
                 ? `Ești în ${active.destination} acum`
                 : daysLeft != null && daysLeft > 0
@@ -571,20 +600,6 @@ function Home() {
           </div>
         </div>
 
-        {/* ---- AI prompt bar ---- */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-solid)', border: '1.5px solid var(--border)', borderRadius: 'var(--r-xl)', padding: '14px 16px', marginBottom: 28, boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ width: 36, height: 36, borderRadius: 'var(--r-sm)', background: 'var(--blue-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue-500)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>
-          </div>
-          <input
-            value={aiPrompt}
-            onChange={e => setAiPrompt(e.target.value)}
-            placeholder={'Spune-mi unde vrei să mergi — ex. "Weekend în Porto, 4 oameni, max 500 €"'}
-            style={{ flex: 1, border: 'none', background: 'none', outline: 'none', font: '400 14px/1 Archivo, sans-serif', color: 'var(--ink)' }}
-          />
-          <button className="btn-primary" style={{ flexShrink: 0 }}>Fă-mi un plan</button>
-        </div>
-
         {/* ---- Main grid ---- */}
         {status === 'loading' && (
           <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>
@@ -603,7 +618,7 @@ function Home() {
         )}
 
         {trips.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: 20, alignItems: 'start' }}>
+          <div className="split" style={{ '--side-w': '400px', gap: 20 }}>
             {/* Left: active + other trips */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {active && (
@@ -638,9 +653,8 @@ function Home() {
               )}
             </div>
 
-            {/* Right panel */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Te așteaptă */}
+            {/* Right panel — phones show only the trips, plus the countdown card above */}
+            <div className="hide-on-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ background: 'var(--surface-solid)', border: '1px solid var(--border)', borderRadius: 'var(--r-xl)', padding: '18px 20px', boxShadow: 'var(--shadow-card)' }}>
                 <div className="kicker" style={{ marginBottom: 14 }}>Te așteaptă</div>
                 <WaitingOnYou trip={active} onOpen={(tab) => navigate(`/trips/${active.id}${tab ? `?tab=${tab}` : ''}`)} />
@@ -665,6 +679,63 @@ function Home() {
 
       <CreateTripModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} submitting={creating} error={error} />
       <JoinByCodeModal open={joinOpen} onClose={() => setJoinOpen(false)} />
+
+      {aiOpen && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAiOpen(false)}>
+          <div className="modal-box" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <span className="modal-title">Asistent</span>
+              <button onClick={() => setAiOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+            </div>
+
+            {trips.length === 0 ? (
+              <div className="modal-body">
+                <div style={{ font: '400 14px/1.6 Archivo, sans-serif', color: 'var(--text-body)' }}>
+                  Asistentul lucrează pe o călătorie anume — cunoaște destinația, datele și bugetul.
+                  Creează întâi o călătorie.
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label className="input-label">Pentru care călătorie</label>
+                    <select
+                      className="input-field" value={aiTripId} onChange={e => setAiTripId(e.target.value)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {trips.map(t => (
+                        <option key={t.id} value={t.id}>{t.title} · {t.destination}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Ce vrei să pun la cale</label>
+                    <textarea
+                      className="input-field" rows={3} autoFocus
+                      placeholder={'ex. "Fă-mi ziua de miercuri: ceva cultură dimineața, plajă după-amiaza, buget mediu"'}
+                      value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
+                      style={{ height: 'auto', padding: '10px 14px', resize: 'vertical', lineHeight: 1.5 }}
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn-secondary" onClick={() => setAiOpen(false)}>Anulează</button>
+                  <button
+                    type="button" className="btn-primary" disabled={!aiPrompt.trim()}
+                    onClick={() => {
+                      const id = aiTripId || trips[0].id
+                      navigate(`/trips/${id}?tab=ai&q=${encodeURIComponent(aiPrompt.trim())}`)
+                    }}
+                  >
+                    Fă-mi un plan
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }

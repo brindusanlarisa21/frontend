@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { House, CalendarDays, Wallet, MessageCircle, Users, Sparkles, ChartColumn } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../../features/auth/authSlice'
 import {
   Button, IconButton, Input, Badge, Card, Avatar,
   TripCover, SegmentedControl, Icon, Chip, ActivityCard, DatePicker, ActivityMap, LocationSearch,
-  BalanceHero, BudgetRing, ExpenseRow, SettleUpRow,
+  BalanceHero, ExpenseRow, SettleUpRow,
 } from '../../components/ds'
 import { fetchTripById, updateTrip, addTripMember, removeTripMember, clearMemberActionError } from '../../features/trips/tripsSlice'
 import { fetchActivities, createActivity, deleteActivity, clearActivityActionError } from '../../features/activities/activitiesSlice'
@@ -109,16 +110,18 @@ function ProfileModal({ open, onClose }) {
   )
 }
 
-function AppRail({ user, activeTab, onTabChange }) {
+function AppRail({ user, activeTab, onTabChange, showRecap }) {
   const navigate = useNavigate()
   const dispatch = useDispatch()
 
   const railTabs = [
-    { value: 'itinerary', label: 'Plan', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-    { value: 'expenses', label: 'Bani', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
-    { value: 'chat', label: 'Chat', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
-    { value: 'members', label: 'Prieteni', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-    { value: 'ai', label: 'Asistent', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg> },
+    { value: 'itinerary', label: 'Plan', icon: <CalendarDays size={21} strokeWidth={1.9} /> },
+    { value: 'expenses', label: 'Bani', icon: <Wallet size={21} strokeWidth={1.9} /> },
+    { value: 'chat', label: 'Chat', icon: <MessageCircle size={21} strokeWidth={1.9} /> },
+    { value: 'members', label: 'Prieteni', icon: <Users size={21} strokeWidth={1.9} /> },
+    { value: 'ai', label: 'Asistent', icon: <Sparkles size={21} strokeWidth={1.9} /> },
+    // Only exists once the trip is over, so it lives here rather than in a second tab bar.
+    ...(showRecap ? [{ value: 'recap', label: 'Recap', icon: <ChartColumn size={21} strokeWidth={1.9} /> }] : []),
   ]
 
   return (
@@ -126,6 +129,10 @@ function AppRail({ user, activeTab, onTabChange }) {
       <div className="rail-logo">
         <Link to="/"><Logo size={32} /></Link>
       </div>
+      <button className="rail-item" onClick={() => navigate('/')}>
+        <House size={21} strokeWidth={1.9} />
+        <span className="rail-item-label">Acasă</span>
+      </button>
       {railTabs.map(t => (
         <button key={t.value} className={`rail-item ${activeTab === t.value ? 'active' : ''}`} onClick={() => onTabChange(t.value)}>
           {t.icon}
@@ -302,11 +309,9 @@ const CAT_UI = {
   transit: { emoji: '🚌', bg: 'rgba(156,163,175,.12)', color: '#6b7280', stripe: '#9ca3af' },
 }
 
-function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEmail, isAdmin, budget, currency = 'EUR' }) {
+function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEmail, isAdmin }) {
   const dispatch = useDispatch()
   const { items, status, error, actionStatus, actionError } = useSelector((state) => state.activities)
-  const expenses = useSelector((state) => state.expenses.items)
-  const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0)
   const [modalOpen, setModalOpen] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
@@ -318,6 +323,10 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   })
 
   useEffect(() => { dispatch(fetchActivities(tripId)) }, [dispatch, tripId])
+
+  // On phones there is no room for a side panel, so the map takes over the
+  // main column instead of sitting under the timeline.
+  const [showMap, setShowMap] = useState(false)
 
   // Horizontal day strip: arrows page through days when they overflow.
   const dayStripRef = useRef(null)
@@ -379,9 +388,9 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   const todayKey = dayKey(new Date().toISOString())
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 560px', minHeight: '80vh' }}>
+    <div className="split tall-main" style={{ '--side-w': '560px' }}>
       {/* ---- Main: day picker + timeline ---- */}
-      <div style={{ borderRight: '2px solid var(--border-strong)' }}>
+      <div className="split-main">
         {/* Day pills */}
         <div className="day-picker-wrap">
           {dayScroll.overflows && (
@@ -423,13 +432,37 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
               {dayItems.length > 0 && (
                 <span className="day-heading-meta">{dayItems.length} PLANURI{totalCost > 0 ? ` · ${totalCost} € EST.` : ''}</span>
               )}
+              <button
+                className="btn-secondary mobile-only"
+                style={{ fontSize: 12, padding: '7px 12px', alignItems: 'center', gap: 6 }}
+                onClick={() => setShowMap((v) => !v)}
+              >
+                {showMap ? (
+                  <>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    Lista
+                  </>
+                ) : (
+                  <>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.5 8 12 8 12s8-6.5 8-12a8 8 0 0 0-8-8z"/></svg>
+                    Harta
+                  </>
+                )}
+              </button>
               <button className="btn-primary" style={{ fontSize: 12, padding: '7px 14px' }} onClick={() => setModalOpen(true)}>
                 + Adaugă
               </button>
             </div>
           </div>
 
-          <div style={{ height: 460, overflowY: 'auto', paddingRight: 6 }}>
+          {/* Phone map view — replaces the timeline rather than sitting under it. */}
+          {showMap && (
+            <div className="mobile-only-block" style={{ padding: '16px 0 20px' }}>
+              <ActivityMap activities={items} height={440} />
+            </div>
+          )}
+
+          <div className={showMap ? 'hide-on-mobile' : undefined} style={{ height: 460, overflowY: 'auto', paddingRight: 6 }}>
           {status === 'loading' &&<div style={{ padding: '20px 0', color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>}
           {status === 'failed' && <div className="auth-error" style={{ marginTop: 16 }}>{error}</div>}
 
@@ -491,16 +524,11 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
       </div>
 
       {/* ---- Right panel: map + budget ---- */}
-      <div style={{ padding: '24px 24px', position: 'sticky', top: 0, maxHeight: '100vh', overflowY: 'auto' }}>
+      <div className="split-side hide-on-mobile">
+        <div className="panel-sticky" style={{ padding: 24 }}>
         {/* Map — renders its own framed box, so it must not sit in a centering flex wrapper */}
         <div style={{ marginBottom: 18 }}>
           <ActivityMap activities={items} height={300} />
-        </div>
-
-        {/* Budget ring — real spend vs the trip's budget */}
-        <div style={{ background: 'var(--surface-solid)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px 20px', marginBottom: 16 }}>
-          <div className="kicker" style={{ marginBottom: 12 }}>Cheltuit până acum</div>
-          <BudgetRing spent={totalSpent} budget={budget} currency={currency} size={76} />
         </div>
 
         {/* Day summary */}
@@ -521,6 +549,7 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
             })}
           </div>
         )}
+        </div>
       </div>
 
       <AddActivityModal
@@ -750,88 +779,136 @@ function SettleModal({ open, debt, submitting, onClose, onSettle }) {
   )
 }
 
-/** Budget card that doubles as the place to set a budget when the trip has none. */
-function BudgetAlertCard({ tripId, budget, currency = 'EUR', spent, canEdit }) {
-  const dispatch = useDispatch()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(budget != null ? String(budget) : '')
-  const [saving, setSaving] = useState(false)
+/** True while the layout is in its stacked, phone/tablet form. */
+function useIsMobileLayout() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches,
+  )
 
-  const hasBudget = budget != null && budget > 0
-  const pct = hasBudget ? Math.round((spent / budget) * 100) : null
-  const over = hasBudget && spent > budget
-  const warn = hasBudget && pct >= 80
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1024px)')
+    const onChange = (e) => setIsMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
-  const tone = over ? { bg: 'rgba(226,86,74,.06)', border: 'rgba(226,86,74,.22)', fg: 'var(--red-500)', label: 'var(--red-700)' }
-    : warn ? { bg: 'rgba(255,122,69,.06)', border: 'rgba(255,122,69,.2)', fg: 'var(--orange-500)', label: 'var(--orange-700)' }
-    : { bg: 'var(--surface-solid)', border: 'var(--border)', fg: 'var(--ink)', label: 'var(--text-muted)' }
+  return isMobile
+}
 
-  const save = async (e) => {
-    e.preventDefault()
-    const value = draft.trim() === '' ? null : parseFloat(draft)
-    if (value !== null && (Number.isNaN(value) || value < 0)) return
-    setSaving(true)
-    await dispatch(updateTrip({ tripId, changes: { budget: value } }))
-    setSaving(false)
-    setEditing(false)
-  }
-
-  if (editing || !hasBudget) {
-    return (
-      <div style={{ background: 'var(--surface-solid)', borderRadius: 'var(--r-lg)', border: '1px dashed var(--border-strong)', padding: '14px 16px' }}>
-        <div className="kicker" style={{ marginBottom: 6 }}>Buget</div>
-        {canEdit ? (
-          <form onSubmit={save} style={{ display: 'flex', gap: 6 }}>
-            <input
-              className="input-field" type="number" min="0" step="1" autoFocus={editing}
-              placeholder="ex. 2400" value={draft} onChange={(e) => setDraft(e.target.value)}
-              style={{ flex: 1, minWidth: 0, height: 36, fontSize: 14 }}
-            />
-            <button type="submit" className="btn-primary" style={{ fontSize: 12, padding: '7px 12px' }} disabled={saving}>
-              {saving ? '…' : 'Setează'}
-            </button>
-          </form>
-        ) : (
-          <div style={{ font: '400 12px/1.4 Archivo, sans-serif', color: 'var(--text-muted)' }}>
-            Niciun buget setat. Un admin poate seta unul.
-          </div>
-        )}
-      </div>
-    )
-  }
+/**
+ * A titled section that collapses on the stacked layout, where everything
+ * competes for one column. On desktop it is just a heading plus its content.
+ */
+function CollapsibleSection({ title, actions, defaultOpen = true, open: openProp, onToggle, className = '', children }) {
+  const isMobile = useIsMobileLayout()
+  const [openState, setOpenState] = useState(defaultOpen)
+  // Controlled when a parent coordinates several sections, uncontrolled otherwise.
+  const controlled = openProp !== undefined
+  const open = controlled ? openProp : openState
+  const toggle = () => (controlled ? onToggle?.(!open) : setOpenState((v) => !v))
+  const expanded = !isMobile || open
 
   return (
-    <div style={{ background: tone.bg, borderRadius: 'var(--r-lg)', border: `1px solid ${tone.border}`, padding: '14px 16px', position: 'relative' }}>
-      <div className="kicker" style={{ marginBottom: 6, color: tone.label }}>
-        {over ? 'Buget depășit' : warn ? 'Alertă buget' : 'Buget'}
+    <div className={`${isMobile ? 'section-card' : ''} ${className}`.trim()}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: expanded ? 16 : 0 }}>
+        {isMobile ? (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: '4px 0', cursor: 'pointer' }}
+          >
+            <span className="kicker">{title}</span>
+            <svg
+              width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+              style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 140ms' }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        ) : (
+          <div className="kicker">{title}</div>
+        )}
+        {actions && expanded && <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>{actions}</div>}
       </div>
-      <div style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', color: tone.fg, fontVariantNumeric: 'tabular-nums' }}>
-        {pct}%
-      </div>
-      <div style={{ font: '400 11px/1 Archivo, sans-serif', color: tone.label, marginTop: 4 }}>
-        {over
-          ? `depășit cu ${Math.round(spent - budget)} ${currency}`
-          : `au mai rămas ${Math.round(budget - spent)} din ${Math.round(budget)} ${currency}`}
-      </div>
-      {canEdit && (
-        <button
-          onClick={() => { setDraft(String(budget)); setEditing(true) }}
-          style={{ position: 'absolute', top: 10, right: 12, background: 'none', border: 'none', cursor: 'pointer', font: '800 11px/1 Archivo, sans-serif', color: tone.label }}
-        >
-          Modifică
-        </button>
-      )}
+      {expanded && children}
     </div>
   )
 }
 
-function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 'EUR' }) {
+/**
+ * The creditor's side of a debt. Paying and requesting are different actions:
+ * here you nudge the other person and confirm receipt — you never "pay".
+ */
+function RequestModal({ open, debt, submitting, onClose, onConfirmReceived }) {
+  const [copied, setCopied] = useState(false)
+  if (!open || !debt) return null
+
+  const amount = `${Number(debt.amount).toFixed(2)} ${debt.currency}`
+  const myLink = debt.toPaymentLink
+
+  const reminder = myLink
+    ? `Salut! Mai ai de decontat ${amount} din călătorie. Poți trimite aici: ${myLink}`
+    : `Salut! Mai ai de decontat ${amount} din călătorie.`
+
+  const copyReminder = () => {
+    navigator.clipboard?.writeText(reminder).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{ maxWidth: 400 }}>
+        <div className="modal-header">
+          <span className="modal-title">Cere de la {debt.fromName}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ textAlign: 'center', marginBottom: 4 }}>
+            <div style={{ font: '400 13px/1 Archivo, sans-serif', color: 'var(--text-muted)', marginBottom: 6 }}>
+              <b style={{ color: 'var(--ink)' }}>{debt.fromName}</b> îți datorează
+            </div>
+            <div style={{ font: '800 28px/1 Archivo, sans-serif', letterSpacing: '-0.02em', color: 'var(--teal-500)', fontVariantNumeric: 'tabular-nums' }}>
+              {amount}
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--bg)', borderRadius: 'var(--r-sm)', padding: '10px 14px', font: '400 13px/1.5 Archivo, sans-serif', color: 'var(--text-body)', border: '1px solid var(--border)' }}>
+            {reminder}
+          </div>
+
+          {!myLink && (
+            <div style={{ font: '400 12px/1.5 Archivo, sans-serif', color: 'var(--text-muted)' }}>
+              Nu ai un link de plată setat. Adaugă unul în profil ca să primești banii mai ușor.
+            </div>
+          )}
+
+          <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={copyReminder}>
+            {copied ? '✓ Copiat' : 'Copiază mesajul de reamintire'}
+          </button>
+
+          <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled={submitting} onClick={onConfirmReceived}>
+            {submitting ? 'Se marchează…' : 'Am primit banii — marchează'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' }) {
   const dispatch = useDispatch()
   const { items, status, error, balances, actionStatus, actionError } = useSelector(s => s.expenses)
   const [modal, setModal] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [settleModal, setSettleModal] = useState(null)
+  const [requestModal, setRequestModal] = useState(null)
   const [filter, setFilter] = useState('all') // all | mine | unsplit
+  // On phones the two sections behave as an accordion: opening one closes the other.
+  const [openSection, setOpenSection] = useState('expenses')
   const [activeSettle, setActiveSettle] = useState(null) // debt shown inline in panel
 
   useEffect(() => {
@@ -864,22 +941,34 @@ function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 
     setSettleModal({ fromUserId: d.fromUserId, toUserId: d.toUserId, fromName: d.fromName, toName: d.toName, amount: d.amount, currency: d.currency ?? 'EUR', toPaymentLink: d.toPaymentLink ?? null })
   }
 
-  const handleSettle = async () => {
-    if (!settleModal) return
-    const result = await dispatch(createSettlement({ tripId, fromUserId: settleModal.fromUserId, toUserId: settleModal.toUserId, amount: settleModal.amount, method: 'Cash' }))
+  const openRequestModal = (d) => {
+    dispatch(clearExpenseActionError())
+    setRequestModal({ fromUserId: d.fromUserId, toUserId: d.toUserId, fromName: d.fromName, toName: d.toName, amount: d.amount, currency: d.currency ?? 'EUR', toPaymentLink: d.toPaymentLink ?? null })
+  }
+
+  const settleDebtOf = async (debt, close) => {
+    if (!debt) return
+    const result = await dispatch(createSettlement({ tripId, fromUserId: debt.fromUserId, toUserId: debt.toUserId, amount: debt.amount, method: 'Cash' }))
     if (createSettlement.fulfilled.match(result)) {
-      setSettleModal(null); setActiveSettle(null)
+      close(); setActiveSettle(null)
       dispatch(fetchExpenses(tripId)); dispatch(fetchBalances(tripId))
     }
   }
+
+  const handleSettle = () => settleDebtOf(settleModal, () => setSettleModal(null))
+  const handleConfirmReceived = () => settleDebtOf(requestModal, () => setRequestModal(null))
 
   const debts = balances?.debts ?? []
   const net = balances?.net ?? 0
   const totalSpent = items.reduce((s, e) => s + (e.amount || 0), 0)
 
   const filteredItems = items.filter(exp => {
-    if (filter === 'mine') return exp.paidByUserId === currentUserId
-    return true
+    if (filter !== 'mine') return true
+    // The server already says whether this is yours; fall back to the id only
+    // when the flag is missing, since a client-derived id can be undefined.
+    return typeof exp.youPaid === 'boolean'
+      ? exp.youPaid
+      : exp.paidByUserId === currentUserId
   })
 
   const editInitial = modal?.mode === 'edit' ? {
@@ -889,38 +978,49 @@ function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 
   } : null
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 0, alignItems: 'start' }}>
+    <div className="split money-split" style={{ '--side-w': '420px' }}>
       {/* ---- Main column ---- */}
-      <div style={{ borderRight: '2px solid var(--border-strong)', minHeight: '80vh', padding: '22px 28px' }}>
+      <div className="split-main tall-main money-main" style={{ padding: '22px 28px' }}>
 
-        {/* Stat cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
-          <div style={{ background: 'var(--surface-solid)', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', padding: '14px 16px', boxShadow: 'var(--shadow-card)' }}>
-            <div className="kicker" style={{ marginBottom: 6 }}>Total cheltuit</div>
-            <div style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>{totalSpent.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</div>
+        {/* Sold — the number that matters most, so it leads the page */}
+        <div className="balance-hero-card" style={{ marginBottom: 18 }}>
+          <div className="balance-hero-kicker">Soldul tău</div>
+          <div className="balance-hero-amount" style={{ color: net >= 0 ? '#fff' : '#fca5a5' }}>
+            {net >= 0 ? '+' : ''}{Number(net).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {currency}
           </div>
-          <div style={{ background: 'var(--surface-solid)', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', padding: '14px 16px', boxShadow: 'var(--shadow-card)' }}>
-            <div className="kicker" style={{ marginBottom: 6 }}>Pe persoană / zi</div>
-            <div style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: 'var(--teal-500)' }}>
-              {members.length > 0 ? (totalSpent / members.length).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'} €
-            </div>
+          <div className="balance-hero-sub">
+            {net > 0 ? `Ai de primit de la ${debts.filter(d => d.toUserId === currentUserId).length} prieteni`
+              : net < 0 ? 'Datorezi bani'
+              : 'Ești la egal'}
           </div>
-          <BudgetAlertCard tripId={tripId} budget={budget} currency={currency} spent={totalSpent} canEdit={isAdmin} />
         </div>
 
-        {/* Filter + add */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="kicker">Cheltuieli · {filteredItems.length}</div>
-            <div style={{ display: 'flex', background: 'rgba(18,41,74,.07)', borderRadius: 999, padding: 3, gap: 2 }}>
-              {[['all','Toate'],['mine','Ale mele']].map(([v,l]) => (
-                <button key={v} onClick={() => setFilter(v)} style={{ padding: '5px 12px', borderRadius: 999, border: 'none', background: filter === v ? '#fff' : 'none', color: filter === v ? 'var(--ink)' : 'var(--text-muted)', font: `${filter === v ? 800 : 400} 12px/1 Archivo, sans-serif`, cursor: 'pointer', boxShadow: filter === v ? '0 1px 3px rgba(11,26,48,.1)' : 'none' }}>{l}</button>
-              ))}
-            </div>
+        {/* Total */}
+        <div style={{ background: 'var(--surface-solid)', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', padding: '14px 16px', boxShadow: 'var(--shadow-card)', marginBottom: 24 }}>
+          <div className="kicker" style={{ marginBottom: 6 }}>Total cheltuit</div>
+          <div style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>
+            {totalSpent.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
           </div>
-          <button className="btn-primary" onClick={openAdd} style={{ fontSize: 13 }}>+ Adaugă cheltuială</button>
         </div>
 
+        <CollapsibleSection
+          title={`Cheltuieli · ${filteredItems.length}`}
+          className="expenses-section"
+          open={openSection === 'expenses'}
+          onToggle={(next) => setOpenSection(next ? 'expenses' : null)}
+          actions={
+            <>
+              <div style={{ display: 'flex', background: 'rgba(18,41,74,.07)', borderRadius: 999, padding: 3, gap: 2 }}>
+                {[['all','Toate'],['mine','Ale mele']].map(([v,l]) => (
+                  <button key={v} onClick={() => setFilter(v)} style={{ padding: '5px 12px', borderRadius: 999, border: 'none', background: filter === v ? '#fff' : 'none', color: filter === v ? 'var(--ink)' : 'var(--text-muted)', font: `${filter === v ? 800 : 400} 12px/1 Archivo, sans-serif`, cursor: 'pointer', boxShadow: filter === v ? '0 1px 3px rgba(11,26,48,.1)' : 'none' }}>{l}</button>
+                ))}
+              </div>
+              <button className="btn-primary" onClick={openAdd} style={{ fontSize: 13, whiteSpace: 'nowrap' }}>+ Adaugă</button>
+            </>
+          }
+        >
+
+        <div className="expense-scroll">
         {status === 'loading' && <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>}
 
         {status === 'succeeded' && filteredItems.length === 0 && (
@@ -959,27 +1059,20 @@ function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 
             </div>
           )
         })}
+        </div>
+        </CollapsibleSection>
       </div>
 
-      {/* ---- Right panel ---- */}
-      <div style={{ padding: '22px 20px', position: 'sticky', top: 0 }}>
-        {/* Sold */}
-        <div className="balance-hero-card" style={{ marginBottom: 18 }}>
-          <div className="balance-hero-kicker">Soldul tău</div>
-          <div className="balance-hero-amount" style={{ color: net >= 0 ? '#fff' : '#fca5a5' }}>
-            {net >= 0 ? '+' : ''}{Number(net).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} €
-          </div>
-          <div className="balance-hero-sub">
-            {net > 0 ? `Ai de primit de la ${debts.filter(d => d.toUserId === currentUserId).length} prieteni`
-              : net < 0 ? 'Datorezi bani'
-              : 'Ești la egal'}
-          </div>
-        </div>
-
-        {/* Decontare */}
+      {/* ---- Right panel — docks to the bottom of the screen on phones ---- */}
+      <div className="split-side settle-dock">
+        <div className="panel-sticky" style={{ padding: '22px 20px' }}>
+        {/* Decontare — collapsed by default on phones so the list stays in view */}
         {debts.length > 0 && (
-          <div>
-            <div className="kicker" style={{ marginBottom: 12 }}>Decontare · {debts.length} transferuri</div>
+          <CollapsibleSection
+            title={`Decontare · ${debts.length} transferuri`}
+            open={openSection === 'settle'}
+            onToggle={(next) => setOpenSection(next ? 'settle' : null)}
+          >
             {debts.map(d => {
               const isMe = d.fromUserId === currentUserId
               const isMeRecv = d.toUserId === currentUserId
@@ -994,12 +1087,13 @@ function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 
                     <div style={{ font: '800 14px/1 Archivo, sans-serif', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)', marginRight: 6 }}>
                       {Number(d.amount).toFixed(2)} €
                     </div>
-                    {isMe ? (
+                    {isMe && (
                       <button className="btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setActiveSettle(isExpanded ? null : `${d.fromUserId}-${d.toUserId}`)}>
                         Plătește
                       </button>
-                    ) : (
-                      <button className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => openSettleModal(d)}>
+                    )}
+                    {isMeRecv && (
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => openRequestModal(d)}>
                         Cere
                       </button>
                     )}
@@ -1022,7 +1116,7 @@ function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 
                 </div>
               )
             })}
-          </div>
+          </CollapsibleSection>
         )}
 
         {debts.length === 0 && balances && (
@@ -1030,10 +1124,12 @@ function Expenses({ tripId, members, currentUserId, isAdmin, budget, currency = 
             ✓ Toate socotelile sunt închise!
           </div>
         )}
+        </div>
       </div>
 
       <ExpenseModal open={modal !== null} onClose={() => setModal(null)} onSubmit={modal?.mode === 'edit' ? handleEdit : handleAdd} submitting={actionStatus === 'loading'} error={actionError} members={members} initial={editInitial} />
       <SettleModal open={settleModal !== null} debt={settleModal} submitting={actionStatus === 'loading'} onClose={() => setSettleModal(null)} onSettle={handleSettle} />
+      <RequestModal open={requestModal !== null} debt={requestModal} submitting={actionStatus === 'loading'} onClose={() => setRequestModal(null)} onConfirmReceived={handleConfirmReceived} />
     </div>
   )
 }
@@ -1227,7 +1323,8 @@ function Chat({ tripId, currentUserId, members }) {
   const connectionRef = useRef(null)
   const feedRef = useRef(null)
 
-  // Proposal form state (right panel)
+  // Proposal form — opened from the calendar button in the composer
+  const [propOpen, setPropOpen] = useState(false)
   const [propForm, setPropForm] = useState({ title: '', location: '', startDate: '', startTime: '', endTime: '', category: 0, cost: '' })
   const [propSubmitting, setPropSubmitting] = useState(false)
   const [propError, setPropError] = useState(null)
@@ -1285,6 +1382,7 @@ function Chat({ tripId, currentUserId, members }) {
     setPropSubmitting(false)
     if (createProposal.fulfilled.match(result)) {
       setPropForm({ title: '', location: '', startDate: '', startTime: '', endTime: '', category: 0, cost: '' })
+      setPropOpen(false)
     } else {
       setPropError(result.payload ?? 'Eroare la trimitere')
     }
@@ -1306,9 +1404,9 @@ function Chat({ tripId, currentUserId, members }) {
   const memberColor = (name) => MEMBER_COLORS[(name?.charCodeAt(0) ?? 0) % MEMBER_COLORS.length]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', height: '78vh', minHeight: 0 }}>
+    <>
       {/* ---- Chat feed — only the messages scroll, so the composer stays put ---- */}
-      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '2px solid var(--border-strong)', minHeight: 0 }}>
+      <div className="chat-pane">
         {/* Messages */}
         <div ref={feedRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {status === 'loading' && <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Se încarcă…</div>}
@@ -1326,7 +1424,7 @@ function Chat({ tripId, currentUserId, members }) {
               const myVote = item.votes?.find(v => v.userId === currentUserId)
 
               return (
-                <div key={`prop-${item.id}`} style={{ background: 'var(--surface-solid)', border: '1.5px solid rgba(31,111,235,.3)', borderRadius: 'var(--r-lg)', padding: '12px 14px', margin: '6px 0 6px 36px', boxShadow: 'var(--shadow-blue)', width: '100%', maxWidth: 380, alignSelf: 'flex-start' }}>
+                <div key={`prop-${item.id}`} className="proposal-card" style={{ background: 'var(--surface-solid)', border: '1.5px solid rgba(31,111,235,.3)', borderRadius: 'var(--r-lg)', padding: '12px 14px', margin: '6px 0 6px 36px', boxShadow: 'var(--shadow-blue)', width: '100%', maxWidth: 380, alignSelf: 'flex-start' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ font: '800 10px/1 Archivo, sans-serif', letterSpacing: '.1em', color: 'var(--blue-700)', textTransform: 'uppercase' }}>
                       PROPUNERE · {item.startTime ? new Date(item.startTime).toLocaleDateString('ro-RO', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
@@ -1379,7 +1477,7 @@ function Chat({ tripId, currentUserId, members }) {
 
         {/* Input bar */}
         <div className="chat-input-bar">
-          <button className="chat-propose-btn" title="Adaugă propunere rapid" style={{ flexShrink: 0 }}>
+          <button className="chat-propose-btn" title="Propune o activitate la vot" onClick={() => setPropOpen(true)} style={{ flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           </button>
           <input
@@ -1396,11 +1494,16 @@ function Chat({ tripId, currentUserId, members }) {
         </div>
       </div>
 
-      {/* ---- Right panel: proposal form ---- */}
-      <div style={{ padding: '20px 18px', borderLeft: '1px solid var(--border)', minHeight: 0, overflowY: 'auto' }}>
-        <div className="kicker" style={{ marginBottom: 16 }}>Propunere nouă</div>
+      {/* ---- Proposal form, opened from the calendar button in the composer ---- */}
+      {propOpen && (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPropOpen(false)}>
+        <div className="modal-box">
+          <div className="modal-header">
+            <span className="modal-title">Propunere nouă</span>
+            <button onClick={() => setPropOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label className="input-label">Titlu</label>
             <input className="input-field" placeholder="Prânz la Time Out Market" value={propForm.title} onChange={e => setProp('title', e.target.value)} />
@@ -1451,13 +1554,18 @@ function Chat({ tripId, currentUserId, members }) {
           </div>
 
           {propError && <div className="auth-error" style={{ fontSize: 12 }}>{propError}</div>}
+        </div>
 
-          <button className="btn-primary" style={{ justifyContent: 'center', marginTop: 4 }} disabled={propSubmitting || !propForm.title} onClick={handlePropSubmit}>
-            {propSubmitting ? 'Se trimite…' : 'Trimite la vot'}
-          </button>
+          <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="btn-secondary" onClick={() => setPropOpen(false)}>Renunț</button>
+            <button className="btn-primary" disabled={propSubmitting || !propForm.title} onClick={handlePropSubmit}>
+              {propSubmitting ? 'Se trimite…' : 'Trimite la vot'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      )}
+    </>
   )
 }
 
@@ -1716,6 +1824,8 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
   const [removingId, setRemovingId] = useState(null)
   const [copied, setCopied] = useState(false)
   const [newTask, setNewTask] = useState('')
+  // Phones show these three as an accordion, like the money tab.
+  const [openSection, setOpenSection] = useState('members')
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
 
   useEffect(() => {
@@ -1762,16 +1872,21 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '80vh' }}>
+    <div className="split tall-main members-split" style={{ '--side-w': 'minmax(0, 1fr)' }}>
       {/* ---- Left: members ---- */}
-      <div style={{ borderRight: '2px solid var(--border-strong)', padding: '22px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-          <div className="kicker">Prieteni · {members.length}</div>
-          <button className="btn-primary" style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { dispatch(clearMemberActionError()); setModalOpen(true) }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Invită
-          </button>
-        </div>
+      <div className="split-main members-main" style={{ padding: '22px 24px' }}>
+        <CollapsibleSection
+          title={`Prieteni · ${members.length}`}
+          className="members-section members-section-first"
+          open={openSection === 'members'}
+          onToggle={(next) => setOpenSection(next ? 'members' : null)}
+          actions={
+            <button className="btn-primary" style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { dispatch(clearMemberActionError()); setModalOpen(true) }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Invită
+            </button>
+          }
+        >
 
         {/* Invite link */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--blue-tint)', border: '1.5px dashed #9cc0f7', borderRadius: 'var(--r-lg)', padding: '12px 14px', marginBottom: 18 }}>
@@ -1794,6 +1909,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
         </div>
 
         {/* Member list */}
+        <div className="pane-scroll">
         {members.map((m) => {
           const isYou = m.email === currentUserEmail
           const canRemove = isAdmin || isYou
@@ -1823,21 +1939,26 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
             </div>
           )
         })}
+        </div>
         {memberActionError && <div className="auth-error" style={{ marginTop: 12 }}>{memberActionError}</div>}
+        </CollapsibleSection>
       </div>
 
       {/* ---- Right: documents + checklist, each a fixed-height pane that scrolls on its own ---- */}
-      <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, height: '80vh', minHeight: 0 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: 300, minHeight: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0 }}>
-          <div className="kicker">Documente · {documents.length}</div>
+      <div className="split-side stack-panes" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <CollapsibleSection
+        title={`Documente · ${documents.length}`}
+        className="members-section"
+        open={openSection === 'documents'}
+        onToggle={(next) => setOpenSection(next ? 'documents' : null)}
+        actions={
           <button className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 5 }} onClick={() => setDocModalOpen(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Adaugă
           </button>
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
+        }
+      >
+        <div className="pane-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
         {documents.length === 0 && (
           <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 10 }}>
             Niciun document încă. Adaugă biletele, rezervările sau actele grupului.
@@ -1873,14 +1994,15 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
           )
         })}
         </div>
-      </div>
+      </CollapsibleSection>
 
         {/* Checklist */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0 }}>
-            <div className="kicker">Checklist · {doneCount} din {checklist.length}</div>
-          </div>
-
+        <CollapsibleSection
+          title={`Checklist · ${doneCount} din ${checklist.length}`}
+          className="members-section members-section-last"
+          open={openSection === 'checklist'}
+          onToggle={(next) => setOpenSection(next ? 'checklist' : null)}
+        >
           <form onSubmit={handleAddTask} style={{ display: 'flex', gap: 8, marginBottom: 14, flexShrink: 0 }}>
             <input
               className="input-field" placeholder="Adaugă ceva de pus în bagaj sau de rezolvat…"
@@ -1891,7 +2013,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
             </button>
           </form>
 
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
+          <div className="pane-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
           {checklist.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
               Niciun element în checklist. Adaugă bagaje comune sau personale.
@@ -1919,7 +2041,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
             </div>
           ))}
           </div>
-        </div>
+        </CollapsibleSection>
       </div>
 
       <InviteMemberModal
@@ -2231,13 +2353,14 @@ function AiPlanCard({ items, tierLabel, planDay, currency, dayRange, onAdd, onPr
   )
 }
 
-function AiChat({ tripId, destination, members, startDate, endDate, budget, currency = 'EUR', expenses }) {
+function AiChat({ tripId, destination, members, startDate, endDate, budget, currency = 'EUR', expenses, initialPrompt }) {
   const { token } = useSelector((s) => s.auth)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [planBusy, setPlanBusy] = useState(false)
   const [planDone, setPlanDone] = useState({}) // message index -> 'added' | 'proposed'
+  const [promptsOpen, setPromptsOpen] = useState(false)
   const feedRef = useRef(null)
   const dispatch = useDispatch()
 
@@ -2262,13 +2385,13 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
     return () => { cancelled = true }
   }, [tripId, token])
 
-  const clearHistory = async () => {
-    try {
-      await apiRequest(`/trips/${tripId}/ai/messages`, { method: 'DELETE', token })
-      setMessages([])
-      setPlanDone({})
-    } catch { /* ignore */ }
-  }
+  // A question typed on the home screen is sent once, on arrival.
+  const sentInitial = useRef(false)
+  useEffect(() => {
+    if (!initialPrompt || sentInitial.current) return
+    sentInitial.current = true
+    send(initialPrompt)
+  }, [initialPrompt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pin the feed to the newest message. Scrolling the container (not a sentinel)
   // keeps the page itself still.
@@ -2371,22 +2494,12 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
   const budgetLeft = budget != null && budget > 0 ? budget - totalSpent : null
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 460px', height: '78vh', minHeight: 0 }}>
+    <div className="split split-fixed" style={{ '--side-w': '460px' }}>
       {/* ---- Main: chat — only the feed scrolls, so the input stays put ---- */}
-      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '2px solid var(--border-strong)', minHeight: 0 }}>
+      <div className="split-main">
         {/* Header */}
         <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid var(--border)' }}>
-          <div className="kicker" style={{ marginBottom: 6 }}>Asistent · {destination}{startDate ? `, ${new Date(startDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}–${new Date(endDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}` : ''}{members?.length ? `, ${members.length} persoane` : ''}</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <h2 style={{ font: '800 28px/1.1 Archivo, sans-serif', letterSpacing: '-0.025em', color: 'var(--ink)', margin: 0 }}>
-              Ce vrei să pun la cale?
-            </h2>
-            {messages.length > 0 && (
-              <button className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px', flexShrink: 0 }} onClick={clearHistory}>
-                Șterge conversația
-              </button>
-            )}
-          </div>
+          <div className="kicker">Asistent · {destination}{startDate ? `, ${new Date(startDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}–${new Date(endDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}` : ''}{members?.length ? `, ${members.length} persoane` : ''}</div>
         </div>
 
         {/* Feed */}
@@ -2437,6 +2550,14 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
 
         {/* Input */}
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="chat-propose-btn mobile-only"
+            title="Întrebări rapide"
+            onClick={() => setPromptsOpen(true)}
+            style={{ flexShrink: 0 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </button>
           <input
             className="chat-input"
             value={input}
@@ -2451,8 +2572,8 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
         </div>
       </div>
 
-      {/* ---- Right panel: quick prompts + context ---- */}
-      <div style={{ padding: '24px 24px', minHeight: 0, overflowY: 'auto' }}>
+      {/* ---- Right panel: quick prompts + context (a sheet on phones) ---- */}
+      <div className="split-side hide-on-mobile" style={{ padding: 24 }}>
         <div className="kicker" style={{ marginBottom: 14 }}>Întrebări rapide</div>
         {QUICK_PROMPTS.map((p) => (
           <button
@@ -2487,6 +2608,45 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
           </div>
         </div>
       </div>
+
+      {promptsOpen && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPromptsOpen(false)}>
+          <div className="modal-box" style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <span className="modal-title">Întrebări rapide</span>
+              <button onClick={() => setPromptsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {QUICK_PROMPTS.map((p) => (
+                <button
+                  key={p.text}
+                  onClick={() => { setPromptsOpen(false); send(p.text) }}
+                  disabled={loading}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--r-md)', border: '1px solid var(--border)', background: 'var(--surface-solid)', color: 'var(--text-body)', font: '400 14px/1.3 Archivo, sans-serif', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <span>{p.icon}</span>
+                  <span>{p.text}</span>
+                </button>
+              ))}
+
+              <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)' }}>
+                <div className="kicker" style={{ marginBottom: 10 }}>Contextul folosit</div>
+                {[
+                  { label: 'Destinație', value: destination },
+                  { label: 'Perioadă', value: startDate ? `${new Date(startDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}–${new Date(endDate).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}` : '—' },
+                  { label: 'Buget rămas', value: budgetLeft != null ? `${Math.round(budgetLeft)} ${currency}` : '—' },
+                  { label: 'Zile libere', value: totalDays ? `${totalDays} zile` : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ font: '400 13px/1 Archivo, sans-serif', color: 'var(--text-muted)' }}>{label}</span>
+                    <span style={{ font: '800 13px/1 Archivo, sans-serif', color: 'var(--ink)' }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2528,7 +2688,7 @@ function Recap({ trip, expenses, activities }) {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '2px solid var(--border-strong)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', borderBottom: '2px solid var(--border-strong)' }}>
         {[
           { label: 'Total', value: `${totalSpent.toLocaleString('ro-RO', { minimumFractionDigits: 0 })} €`, color: 'var(--ink)' },
           { label: 'Pe persoană', value: `${Math.round(perPerson).toLocaleString('ro-RO')} €`, color: 'var(--ink)' },
@@ -2543,9 +2703,9 @@ function Recap({ trip, expenses, activities }) {
       </div>
 
       {/* Charts + top voted */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+      <div className="split" style={{ '--side-w': 'minmax(0, 1fr)' }}>
         {/* Bar chart */}
-        <div style={{ padding: '24px 28px', borderRight: '1px solid var(--border)' }}>
+        <div className="split-main" style={{ padding: '24px 28px' }}>
           <div className="kicker" style={{ marginBottom: 16 }}>Cheltuieli pe categorii</div>
           {Object.keys(catTotals).length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Nicio cheltuială.</div>
@@ -2569,7 +2729,7 @@ function Recap({ trip, expenses, activities }) {
         </div>
 
         {/* Top voted */}
-        <div style={{ padding: '24px 28px' }}>
+        <div className="split-side" style={{ padding: '24px 28px' }}>
           <div className="kicker" style={{ marginBottom: 16 }}>Cel mai bine votate</div>
           {activities.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Nicio activitate.</div>
@@ -2618,7 +2778,15 @@ function TripDetail() {
   const { current: trip, currentStatus: status, currentError: error } = useSelector(s => s.trips)
   const { items: activities } = useSelector(s => s.activities)
   const { items: expenses } = useSelector(s => s.expenses)
-  const [tab, setTab] = useState('itinerary')
+  // Home can deep-link straight into a tab, optionally with a question for the assistant.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'itinerary')
+  const initialPrompt = searchParams.get('q')
+
+  useEffect(() => {
+    // Consume the params so a reload does not re-send the question.
+    if (searchParams.get('tab') || searchParams.get('q')) setSearchParams({}, { replace: true })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { dispatch(fetchTripById(tripId)) }, [dispatch, tripId])
 
@@ -2654,18 +2822,9 @@ function TripDetail() {
   const currentUserId = currentMember?.userId
   const phase = tripPhase(trip.startDate, trip.endDate)
 
-  const tabs = [
-    { value: 'itinerary', label: 'Plan' },
-    { value: 'expenses', label: 'Bani' },
-    { value: 'chat', label: 'Chat' },
-    { value: 'members', label: 'Prieteni' },
-    { value: 'ai', label: '✦ Asistent' },
-    ...(phase === 'Completed' ? [{ value: 'recap', label: 'Recapitulare' }] : []),
-  ]
-
   return (
     <>
-      <AppRail user={user} activeTab={tab} onTabChange={setTab} />
+      <AppRail user={user} activeTab={tab} onTabChange={setTab} showRecap={phase === 'Completed'} />
       <div className="app-content">
         {/* ---- Workspace header ---- */}
         <div className="workspace-header">
@@ -2698,14 +2857,6 @@ function TripDetail() {
             </div>
           </div>
 
-          {/* Tab bar */}
-          <div className="tab-bar">
-            {tabs.map(({ value, label }) => (
-              <button key={value} className={`tab-item ${tab === value ? 'active' : ''}`} onClick={() => setTab(value)}>
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* ---- Tab content ---- */}
@@ -2714,17 +2865,16 @@ function TripDetail() {
             <Itinerary
               tripId={trip.id} tripStartDate={trip.startDate} tripEndDate={trip.endDate}
               members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin}
-              budget={trip.budget} currency={trip.currency}
             />
           )}
           {tab === 'expenses' && (
-            <Expenses tripId={trip.id} members={trip.members} currentUserId={currentUserId} isAdmin={isAdmin} budget={trip.budget} currency={trip.currency} />
+            <Expenses tripId={trip.id} members={trip.members} currentUserId={currentUserId} isAdmin={isAdmin} currency={trip.currency} />
           )}
           {tab === 'members' && (
             <Members members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin} tripId={trip.id} />
           )}
           {tab === 'chat' && <Chat tripId={trip.id} currentUserId={currentUserId} members={trip.members} />}
-          {tab === 'ai' && <AiChat tripId={trip.id} destination={trip.destination} members={trip.members} startDate={trip.startDate} endDate={trip.endDate} budget={trip.budget} currency={trip.currency} expenses={expenses} />}
+          {tab === 'ai' && <AiChat tripId={trip.id} destination={trip.destination} members={trip.members} startDate={trip.startDate} endDate={trip.endDate} budget={trip.budget} currency={trip.currency} expenses={expenses} initialPrompt={initialPrompt} />}
           {tab === 'recap' && <Recap trip={trip} expenses={expenses} activities={activities} />}
         </div>
       </div>

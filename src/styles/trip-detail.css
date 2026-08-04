@@ -104,6 +104,26 @@ input, textarea, select { font-family: inherit; }
   text-align: left;
 }
 
+/* ============================================================
+   SPLIT LAYOUT — main column + side panel.
+   Collapses to a single stacked column on tablet and phone, so
+   these live in CSS rather than inline styles.
+   ============================================================ */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--side-w, 400px);
+  /* Items stretch so a sticky panel inside one has room to travel. */
+  align-items: stretch;
+}
+.split-main { min-width: 0; border-right: 2px solid var(--border-strong); }
+.split-side { min-width: 0; }
+
+/* Panes that own their scrolling (chat, assistant): the viewport minus the
+   workspace header, so the composer sits on the bottom edge with no dead space. */
+.split-fixed { height: calc(100dvh - 112px); min-height: 420px; align-items: stretch; }
+.split-fixed .split-main { display: flex; flex-direction: column; min-height: 0; }
+.split-fixed .split-side { min-height: 0; overflow-y: auto; }
+
 /* ---- Trip workspace layout: content + right panel ---- */
 .workspace-layout {
   display: grid;
@@ -897,7 +917,6 @@ input, textarea, select { font-family: inherit; }
   width: 100%;
   text-align: left;
 }
-@media (max-width: 700px) { .auth-layout { grid-template-columns: 1fr; } }
 
 .auth-panel-left {
   background: var(--ink);
@@ -940,7 +959,6 @@ input, textarea, select { font-family: inherit; }
   color: rgba(255,255,255,.55);
   margin-top: 3px;
 }
-@media (max-width: 700px) { .auth-panel-left { display: none; } }
 
 .auth-panel-right {
   background: var(--bg);
@@ -1072,4 +1090,463 @@ input, textarea, select { font-family: inherit; }
 
 .checkbox-light:checked::before {
   transform: scale(1);
+}
+
+/* ============================================================
+   RESPONSIVE — tablet and phone share one layout, fluid to width.
+   Breakpoint at 1024px: below it the rail becomes a bottom bar,
+   every split stacks, and modals turn into bottom sheets.
+   ============================================================ */
+@media (max-width: 1024px) {
+  /* ---- Rail becomes a bottom tab bar ---- */
+  .app-rail {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: stretch;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, .96);
+    backdrop-filter: blur(20px) saturate(160%);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 20px rgba(11, 26, 48, .08);
+  }
+  .rail-logo,
+  .rail-spacer { display: none; }
+
+  .rail-item {
+    width: auto;
+    flex: 1;
+    gap: 4px;
+    padding: 8px 2px;
+    color: var(--text-muted);
+    border-radius: 12px;
+  }
+  .rail-item:hover { background: none; color: var(--text-body); }
+  .rail-item.active { background: none; color: var(--blue-700); }
+  /* The desktop indicator is a bar on the left edge; on the bar it sits on top. */
+  .rail-item.active::before {
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    border-radius: 0 0 2px 2px;
+  }
+  .rail-item-label { font-size: 9px; letter-spacing: .08em; }
+
+  /* ---- Content clears the bottom bar instead of the side rail ---- */
+  .app-content {
+    margin-left: 0;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ---- Splits stack ---- */
+  .split,
+  .split-fixed,
+  .workspace-layout {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+  .split-main {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .split-fixed .split-main { min-height: 60vh; }
+  .split-fixed .split-side { overflow-y: visible; }
+
+  /* ---- Header and tabs ---- */
+  .workspace-header { padding: 18px 18px 0; }
+  .workspace-title { font-size: 26px; }
+  .workspace-meta { gap: 10px 14px; flex-wrap: wrap; }
+
+  .tab-bar {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-item { white-space: nowrap; flex-shrink: 0; }
+
+  /* ---- Day strip ---- */
+  .day-picker-wrap { padding: 14px 18px; }
+  .day-section { padding: 0 18px; }
+
+  /* ---- Auth: navy panel becomes a short header ---- */
+  .auth-layout { grid-template-columns: minmax(0, 1fr); }
+  .auth-panel-left {
+    min-height: 0;
+    padding: 28px 24px 30px;
+  }
+  .auth-panel-left-content { flex: none; }
+  .auth-panel-left-title { font-size: 30px; margin-bottom: 10px; }
+  .auth-panel-left-sub { font-size: 13.5px; margin-bottom: 18px; }
+  .auth-stats { padding-top: 16px; }
+  /* The band hugs its content; the form takes the rest of the height. Without
+     this both rows stretch and the page ends up half empty on a tablet. */
+  .auth-layout { grid-template-rows: auto 1fr; }
+  .auth-panel-right { padding: 28px 20px 40px; align-items: flex-start; }
+  /* Keeps the form a readable card instead of stretching across a tablet. */
+  .auth-form-card { max-width: 440px; margin: 0 auto; padding: 24px 22px; }
+}
+
+/* Phone-only refinements. */
+@media (max-width: 640px) {
+  .app-content { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+
+  .workspace-header { padding: 14px 16px 0; }
+  .workspace-title { font-size: 23px; }
+  .day-section,
+  .day-picker-wrap { padding-left: 16px; padding-right: 16px; }
+
+  /* Modals slide up from the bottom edge. */
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-box {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0;
+    animation: sheet-up 200ms ease-out;
+  }
+  /* The grab handle that marks a sheet as draggable-looking. */
+  .modal-box::before {
+    content: '';
+    display: block;
+    width: 38px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--border-strong);
+    margin: 10px auto 0;
+  }
+  .modal-footer { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: .6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-box { animation: none; }
+}
+
+/* Side panel that tracks the page on desktop and simply flows on smaller screens. */
+.panel-sticky {
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+@media (max-width: 1024px) {
+  .panel-sticky { position: static; max-height: none; overflow-y: visible; }
+}
+
+/* Documents + checklist: fixed panes that scroll on desktop, plain stacked flow
+   on smaller screens where the page itself is the scroller. */
+.stack-panes { height: 80vh; min-height: 0; }
+.members-main { display: flex; flex-direction: column; min-height: 0; }
+.members-main .pane-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+
+@media (max-width: 1024px) {
+  /* Members, documents and checklist each scroll inside their own band rather
+     than making the whole page one long scroll. */
+  .members-split {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 178px);
+  }
+  .members-main {
+    flex: 0 0 auto;
+    border-bottom: none;
+    padding: 16px 16px 0 !important;
+  }
+  .members-main:has(.pane-scroll) { flex: 1; min-height: 0; }
+
+  .stack-panes {
+    flex: 0 0 auto;
+    height: auto;
+    gap: 0 !important;
+    padding: 0 16px 16px !important;
+  }
+  .stack-panes:has(.pane-scroll) { flex: 1; min-height: 0; }
+  .stack-panes > * { flex: 0 0 auto; height: auto !important; min-height: 0; }
+  .stack-panes > *:has(.pane-scroll) { flex: 1 !important; min-height: 0; }
+
+  /* The three sections read as one stacked block, like the money tab. */
+  /* Scoped to the tab so these win over the generic .section-card rule that is
+     declared further down the file. */
+  .members-split .members-section {
+    margin-bottom: 0;
+    border-radius: 0;
+    border-top: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  /* The open section fills the height its column was given, so it reaches down
+     to the next header instead of hugging its content. */
+  .members-split .members-section:has(.pane-scroll) { flex: 1; min-height: 0; }
+  .members-split .members-section-first { border-radius: var(--r-lg) var(--r-lg) 0 0; border-top: 1px solid var(--border); }
+  .members-split .members-section-last { border-radius: 0 0 var(--r-lg) var(--r-lg); }
+}
+
+/* ============================================================
+   HOME
+   ============================================================ */
+.home-content { padding: 32px 36px 60px; }
+
+.home-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.home-greeting { font: 800 36px/1.1 'Archivo', sans-serif; }
+
+@media (max-width: 1024px) {
+  .home-content { padding: 22px 20px calc(80px + env(safe-area-inset-bottom, 0px)); }
+  /* An older rule draws a rule under this header; on phones the coloured band
+     above already separates the top of the page from the trips. */
+  /* The base rule pads this header on all sides; on phones the band above
+     supplies the spacing, so clear it rather than stacking two gaps. */
+  .home-header { flex-direction: column; align-items: flex-end; border-bottom: none; padding: 0; margin-bottom: 14px; }
+  /* A taller band with the buttons tucked right under it. */
+  .home-hero { padding-top: 26px; padding-bottom: 26px; margin-bottom: 0; }
+  .home-header { margin-top: 10px; }
+  /* Buttons sit to the right, sized to their content, and stay compact. */
+  .home-header > div:last-child { flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .home-header > div:last-child > button {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  .home-header > div:last-child > button svg { width: 13px; height: 13px; }
+  .home-greeting { font-size: 28px; }
+}
+
+@media (max-width: 640px) {
+  .home-content { padding-left: 16px; padding-right: 16px; }
+  .home-greeting { font-size: 25px; }
+  /* Buttons go full width so they are comfortable thumb targets. */
+  .home-header > div:last-child > button { justify-content: center; }
+}
+
+@media (max-width: 1024px) {
+  /* Rail avatars are sized inline for the desktop rail; shrink them on the bar. */
+  .app-rail .rail-item > div {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 10px !important;
+  }
+  /* The currency hint has no room next to four tabs. */
+  .app-rail .rail-item > .rail-item-label[style] { font-size: 9px !important; }
+}
+
+/* Shown only where the layout has stacked and the target is off-screen. */
+.mobile-only { display: none !important; }
+@media (max-width: 1024px) {
+  .mobile-only { display: inline-flex !important; }
+}
+
+/* Hidden once the layout stacks — the phone shows this content another way. */
+@media (max-width: 1024px) {
+  .hide-on-mobile { display: none !important; }
+}
+
+/* Block-level counterpart of .mobile-only, for containers rather than buttons. */
+.mobile-only-block { display: none; }
+@media (max-width: 1024px) {
+  .mobile-only-block { display: block; }
+}
+
+/* ============================================================
+   LEAFLET GUARDS
+   The global `* { box-sizing: border-box }` reset and any inherited
+   image sizing shift Leaflet's tiles and marker anchors, which shows
+   up as a skewed map with pins in the wrong place.
+   ============================================================ */
+.leaflet-container,
+.leaflet-container * { box-sizing: content-box; }
+.leaflet-container img { max-width: none !important; height: auto; }
+.leaflet-container .leaflet-control,
+.leaflet-container .leaflet-popup-content-wrapper { box-sizing: border-box; }
+
+/* Keeps desktop columns from looking stunted. On the stacked layout it must go —
+   a forced height leaves a gap between a collapsed section and the next one. */
+.tall-main { min-height: 80vh; }
+@media (max-width: 1024px) {
+  .tall-main { min-height: 0; }
+  /* The stacked side panel sits directly under the section above it. */
+  .split-side { padding-top: 0 !important; }
+}
+
+/* On the stacked layout the settlement section sits below this list, so the
+   list is capped and scrolls internally instead of pushing it off-screen. */
+@media (max-width: 1024px) {
+  /* The settlement section sticks to the bottom of the screen, just above the
+     tab bar, so it stays visible no matter how long the expense list grows.
+     Capping the list by height was guesswork; this does not depend on it. */
+  /* The settlement section follows the expense one directly. With the accordion
+     only one is open at a time, so both headers stay on screen without docking. */
+  .settle-dock { position: static; }
+
+  /* The money tab is bounded to the screen and the expense list takes exactly
+     the space left over, so the settlement header is always visible — no
+     guessed max-height involved. */
+  .money-split {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 178px);
+  }
+  /* Only stretches while the expense list is open; collapsed it hugs its cards
+     so the two sections sit against each other. */
+  .money-main { flex: 0 0 auto; display: flex; flex-direction: column; }
+  .money-main:has(.expense-scroll) { flex: 1; min-height: 0; }
+  /* Only the expanded section takes the leftover space; collapsed it is a
+     header-height card like the other one. */
+  .expenses-section { flex: 0 0 auto; display: flex; flex-direction: column; }
+  .expenses-section:has(.expense-scroll) { flex: 1; min-height: 0; }
+  .expense-scroll {
+    flex: 1;
+    min-height: 80px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  /* Expanded, it scrolls inside whatever height is left rather than overflowing. */
+  .settle-dock { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+  /* Both money columns use the same side padding so the two cards line up. */
+  /* Bottom padding would show as a gap between the two joined sections, and the
+     stacked-column rule's bottom border draws a line right across the screen. */
+  .money-main { padding: 16px 16px 0 !important; border-bottom: none; }
+  .settle-dock .panel-sticky { padding: 0 16px 12px !important; }
+
+  /* Both money sections read as the same object: a card on the page background. */
+  .section-card {
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  /* The two money sections read as one stacked block: no gap, joined corners. */
+  .expenses-section {
+    margin-bottom: 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-bottom: none;
+  }
+  .settle-dock .section-card {
+    margin-bottom: 0;
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
+    /* No seam where the two cards meet — they are one surface. */
+    border-top: none;
+  }
+}
+
+/* ============================================================
+   CHAT / ASSISTANT ON THE STACKED LAYOUT
+   The composer and the trip header must stay put, so the column
+   is bounded to the viewport and only the feed scrolls.
+   dvh accounts for mobile browser chrome that hides on scroll.
+   ============================================================ */
+@media (max-width: 1024px) {
+  .split-fixed .split-main {
+    display: flex;
+    flex-direction: column;
+    /* Same budget as .chat-pane: header above, reserved tab-bar space below. */
+    height: calc(100dvh - 162px);
+    min-height: 300px;
+    border-bottom: none;
+  }
+  /* Header and composer keep their size; the feed in between takes the rest. */
+  .split-fixed .split-main > :first-child,
+  .split-fixed .split-main > :last-child { flex-shrink: 0; }
+}
+
+/* Compact the money summary on phones so the expense list keeps usable height. */
+@media (max-width: 1024px) {
+  .balance-hero-card { padding: 14px 16px; margin-bottom: 12px; }
+  .balance-hero-amount { font-size: 25px; margin-bottom: 4px; }
+  .balance-hero-sub { font-size: 12px; }
+}
+
+/* Proposal cards drop their avatar-column indent on phones and use the full
+   width, so the whole card fits without clipping. */
+@media (max-width: 640px) {
+  .proposal-card {
+    margin-left: 0 !important;
+    max-width: 100% !important;
+  }
+  .proposal-card button { font-size: 12px; }
+}
+
+/* ============================================================
+   CHAT PANE — single column, bounded to the space the workspace
+   header leaves, so the composer is always at the bottom edge.
+   ============================================================ */
+.chat-pane {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 112px);
+  min-height: 420px;
+}
+.chat-pane > :last-child { flex-shrink: 0; }
+
+@media (max-width: 1024px) {
+  .chat-pane {
+    /* Viewport minus the workspace header above and the padding app-content
+       already reserves for the fixed tab bar. No negative margin — that pulled
+       the composer underneath the bar. */
+    height: calc(100dvh - 162px);
+    min-height: 300px;
+  }
+}
+
+/* Countdown band — a full-bleed page header on phones, not a floating card.
+   Negative margins cancel the page padding so the colour reaches both edges. */
+.home-hero {
+  background: linear-gradient(160deg, #12294a 0%, #0b1a30 100%);
+  margin: -22px -20px 20px;
+  padding: 22px 20px 20px;
+}
+@media (max-width: 640px) {
+  .home-hero { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; }
+}
+
+/* Glassy button for use on the dark hero band — reads as secondary against it. */
+.hero-btn {
+  background: rgba(255, 255, 255, .12);
+  border: 1px solid rgba(255, 255, 255, .28);
+  color: #fff;
+  font: 800 13px/1 'Archivo', sans-serif;
+  padding: 10px 16px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 140ms, border-color 140ms;
+}
+.hero-btn:hover {
+  background: rgba(255, 255, 255, .2);
+  border-color: rgba(255, 255, 255, .45);
+}
+
+/* Wordmark under the logo in the rail. */
+.rail-wordmark {
+  font: 800 11px/1 'Archivo', sans-serif;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+@media (max-width: 1024px) {
+  /* The rail is a bottom bar there and hides its logo entirely. */
+  .rail-wordmark { display: none; }
 }

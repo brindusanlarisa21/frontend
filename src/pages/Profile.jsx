@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useDispatch, useSelector } from 'react-redux'
+import { House, Wallet, FileText, Sparkles } from 'lucide-react'
 import { logout } from '../features/auth/authSlice'
 import '../styles/ds/index.css'
 import '../styles/trip-detail.css'
@@ -10,36 +11,44 @@ const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://l
 
 function AppRail({ user }) {
   const navigate = useNavigate()
-  const dispatch = useDispatch()
   return (
     <nav className="app-rail">
       <div className="rail-logo">
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
             <path d="M16 2C10.5 2 6 6.4 6 11.9 6 19.5 16 30 16 30V2Z" fill="#1f6feb" />
             <path d="M16 2c5.5 0 10 4.4 10 9.9C26 19.5 16 30 16 30V2Z" fill="#4f97ff" />
             <circle cx="16" cy="11.6" r="3.1" fill="#fff" />
           </svg>
+          <span className="rail-wordmark">TripSplit</span>
         </button>
       </div>
       <button className="rail-item" onClick={() => navigate('/')}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
+        <House size={21} strokeWidth={1.9} />
         <span className="rail-item-label">Acasă</span>
       </button>
+
+      <button className="rail-item" onClick={() => navigate('/')}>
+        <Wallet size={21} strokeWidth={1.9} />
+        <span className="rail-item-label">Bani</span>
+      </button>
+
+      <button className="rail-item" onClick={() => navigate('/')}>
+        <FileText size={21} strokeWidth={1.9} />
+        <span className="rail-item-label">Acte</span>
+      </button>
+
+      <button className="rail-item" onClick={() => navigate('/')}>
+        <Sparkles size={21} strokeWidth={1.9} />
+        <span className="rail-item-label">Asistent</span>
+      </button>
+
       <div className="rail-spacer" />
       <button className="rail-item active">
         <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#3d86f5,#1f6feb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff' }}>
           {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
         </div>
         <span className="rail-item-label">Profil</span>
-      </button>
-      <button className="rail-item" onClick={() => { dispatch(logout()); navigate('/login') }} style={{ marginTop: 4 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-        <span className="rail-item-label">Ieșire</span>
       </button>
     </nav>
   )

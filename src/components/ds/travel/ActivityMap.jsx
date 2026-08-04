@@ -54,6 +54,7 @@ function ActivityMap({ activities = [], height = 320, style }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
+  const fitRef = useRef(null);
 
   // Memoised so the marker effect does not re-run (and re-fit the view) on every render.
   const pinned = useMemo(
@@ -69,7 +70,18 @@ function ActivityMap({ activities = [], height = 320, style }) {
       maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;
+
+    // Leaflet caches the container size. When the box is revealed after mount or
+    // resized, the size must be refreshed AND the view re-fitted — a fit computed
+    // against a zero-sized container leaves the pins off-screen.
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+      fitRef.current?.();
+    });
+    observer.observe(containerRef.current);
+
     return () => {
+      observer.disconnect();
       map.remove();
       mapRef.current = null;
     };
@@ -81,7 +93,11 @@ function ActivityMap({ activities = [], height = 320, style }) {
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = []
-    if (pinned.length === 0) return;
+
+    if (pinned.length === 0) {
+      fitRef.current = null;
+      return;
+    }
 
     const points = pinned.map((a) => [a.latitude, a.longitude]);
     pinned.forEach((a, i) => {
@@ -91,11 +107,15 @@ function ActivityMap({ activities = [], height = 320, style }) {
       markersRef.current.push(marker);
     });
 
-    if (points.length === 1) {
-      map.setView(points[0], 12);
-    } else {
-      map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 14 });
-    }
+    const fit = () => {
+      // Nothing sensible to compute against a collapsed container.
+      if (!map.getSize().x) return;
+      if (points.length === 1) map.setView(points[0], 12);
+      else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 14 });
+    };
+
+    fitRef.current = fit;
+    fit();
   }, [pinned]);
 
   return (
