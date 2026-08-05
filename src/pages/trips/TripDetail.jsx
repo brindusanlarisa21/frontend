@@ -402,6 +402,10 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   const totalCost = visibleItems.reduce((s, a) => s + (a.cost || 0), 0)
   const todayKey = dayKey(new Date().toISOString())
 
+  const todayItems = items
+    .filter((a) => dayKey(a.startTime) === todayKey)
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+
   return (
     <div className="split tall-main" style={{ '--side-w': '560px' }}>
       {/* ---- Main: day picker + timeline ---- */}
@@ -583,11 +587,11 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
           <ActivityMap activities={items} height={300} />
         </div>
 
-        {/* Day summary */}
-        {dayItems.length > 0 && (
+        {/* What is on today, regardless of which week the timeline shows */}
+        {todayItems.length > 0 && (
           <div>
             <div className="kicker" style={{ marginBottom: 10 }}>Ziua de azi</div>
-            {dayItems.slice(0, 4).map((a) => {
+            {todayItems.slice(0, 4).map((a) => {
               const cat = CAT_UI[a.category?.toLowerCase()] || CAT_UI.sight
               return (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
