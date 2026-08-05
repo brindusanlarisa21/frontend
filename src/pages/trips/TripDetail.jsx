@@ -2,7 +2,10 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import {
   House, CalendarDays, Wallet, MessageCircle, Users, Sparkles, ChartColumn,
-  Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2, Navigation,
+  Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2,
+  // Aliased: `Navigation` is also a DOM global, and the bare name resolves to
+  // the browser interface, which throws when React calls it as a component.
+  Navigation as NavigationIcon,
 } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
@@ -252,12 +255,7 @@ function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate, initi
           <input className="input-field" placeholder="ex. Turnul Belém" value={title} onChange={(e) => setTitle(e.target.value)} required />
         </div>
 
-        <LocationSearch label="Loc" onSelect={setPlace} />
-        {place?.location && (
-          <div style={{ font: '400 12px/1 Archivo, sans-serif', color: 'var(--text-muted)', marginTop: -8 }}>
-            Loc curent: <b style={{ color: 'var(--ink)' }}>{place.location}</b>
-          </div>
-        )}
+        <LocationSearch label="Loc" onSelect={setPlace} initialValue={initial?.location ?? ''} />
 
         <div>
           <label className="input-label">Categorie</label>
@@ -352,6 +350,16 @@ function mapsUrl({ latitude, longitude, location }) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`
   }
   return null
+}
+
+/** "45 min", "2 h", "1 h 30" — plainer than a raw minute count. */
+function formatDuration(minutes) {
+  const m = Math.round(minutes)
+  if (m <= 0) return null
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  const rest = m % 60
+  return rest === 0 ? `${h} h` : `${h} h ${rest}`
 }
 
 function formatWeekRange({ from, to }) {
@@ -557,7 +565,7 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
                               </span>
                               {a.endTime && (
                                 <span className="tl-duration">
-                                  {Math.round((new Date(a.endTime) - new Date(a.startTime)) / 60000)}′
+                                  {formatDuration((new Date(a.endTime) - new Date(a.startTime)) / 60000)}
                                 </span>
                               )}
                             </div>
@@ -574,39 +582,41 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div className="tl-title">{a.title}</div>
                                   <div className="tl-meta">
-                                    {a.location && <span>{a.location}</span>}
+                                    {a.location && (
+                                      <span className="tl-place">
+                                        {a.location}
+                                        {mapsUrl(a) && (
+                                          <a
+                                            className="tl-nav"
+                                            href={mapsUrl(a)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={`Deschide ${a.location} în hărți`}
+                                          >
+                                            <NavigationIcon size={13} strokeWidth={2.2} />
+                                          </a>
+                                        )}
+                                      </span>
+                                    )}
                                     {a.cost != null && (
                                       <span style={{ color: cat.color, fontWeight: 800 }}>{a.cost} {currency} / pers</span>
                                     )}
                                   </div>
                                 </div>
-                                <div className="tl-actions">
-                                  {mapsUrl(a) && (
-                                    <a
-                                      className="icon-btn-sm tl-nav"
-                                      href={mapsUrl(a)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      title={`Deschide ${a.location ?? 'locația'} în hărți`}
+                                {canEdit && (
+                                  <div className="tl-actions">
+                                    <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
+                                      <Pencil size={13} strokeWidth={2.2} />
+                                    </button>
+                                    <button
+                                      className="icon-btn-sm" title="Șterge"
+                                      disabled={deletingId === a.id}
+                                      onClick={() => handleDelete(a.id)}
                                     >
-                                      <Navigation size={13} strokeWidth={2.2} />
-                                    </a>
-                                  )}
-                                  {canEdit && (
-                                    <>
-                                      <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
-                                        <Pencil size={13} strokeWidth={2.2} />
-                                      </button>
-                                      <button
-                                        className="icon-btn-sm" title="Șterge"
-                                        disabled={deletingId === a.id}
-                                        onClick={() => handleDelete(a.id)}
-                                      >
-                                        <Trash2 size={13} strokeWidth={2.2} />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
+                                      <Trash2 size={13} strokeWidth={2.2} />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </li>

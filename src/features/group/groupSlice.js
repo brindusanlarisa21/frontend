@@ -132,6 +132,21 @@ export const addDocument = createAsyncThunk(
   },
 )
 
+export const updateDocument = createAsyncThunk(
+  'group/updateDocument',
+  async ({ tripId, documentId, document }, { getState, rejectWithValue }) => {
+    try {
+      return await apiRequest(`/trips/${tripId}/documents/${documentId}`, {
+        method: 'PUT',
+        body: document,
+        ...withToken(getState),
+      })
+    } catch (err) {
+      return rejectWithValue(err.message)
+    }
+  },
+)
+
 export const deleteDocument = createAsyncThunk(
   'group/deleteDocument',
   async ({ tripId, documentId }, { getState, rejectWithValue }) => {
@@ -210,6 +225,10 @@ const groupSlice = createSlice({
         state.error = action.payload
       })
       .addCase(addDocument.fulfilled, (state, action) => { state.documents.push(action.payload) })
+      .addCase(updateDocument.fulfilled, (state, action) => {
+        const i = state.documents.findIndex((d) => d.id === action.payload.id)
+        if (i !== -1) state.documents[i] = action.payload
+      })
       .addCase(deleteDocument.fulfilled, (state, action) => {
         state.documents = state.documents.filter((d) => d.id !== action.payload)
       })

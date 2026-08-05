@@ -2,12 +2,17 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { searchLocations } from '../../../api/geocode'
 import Icon from '../core/Icon'
 
-function LocationSearch({ label = 'Place', onSelect, style }) {
-  const [query, setQuery] = useState('')
+/**
+ * `initialValue` fills the box when editing something that already has a place,
+ * so it is visible instead of looking unset. Typing over it still clears the
+ * selection — new text must not keep the old coordinates.
+ */
+function LocationSearch({ label = 'Place', onSelect, initialValue = '', style }) {
+  const [query, setQuery] = useState(initialValue)
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected] = useState(initialValue ? { location: initialValue } : null)
   const debounceRef = useRef(null)
   const containerRef = useRef(null)
 

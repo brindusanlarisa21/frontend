@@ -1752,3 +1752,17 @@ input, textarea, select { font-family: inherit; }
 @media (hover: none) {
   .tl-actions > button { opacity: 1 !important; }
 }
+
+/* Directions sit inline with the place name as a bare glyph — not a button. */
+.tl-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tl-nav {
+  display: inline-flex;
+  color: var(--text-faint);
+  transition: color 140ms;
+}
+.tl-nav:hover { color: var(--blue-700); }
+
