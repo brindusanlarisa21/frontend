@@ -1707,3 +1707,30 @@ input, textarea, select { font-family: inherit; }
   .tl-dot { width: 28px; height: 28px; }
   .tl-content { padding-left: 10px; }
 }
+
+/* The timeline takes the height the viewport leaves under the header and the
+   week pills, rather than a fixed window that wasted the rest of the page. */
+.tl-scroll {
+  height: calc(100dvh - 260px);
+  min-height: 320px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+@media (max-width: 1024px) {
+  .tl-scroll { height: calc(100dvh - 300px); }
+}
+
+/* Entries read as plain text beside the dot — no card, no border, no shadow.
+   Overrides the boxed look declared earlier in this file. */
+.tl-card {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 6px 0 0;
+}
+.tl-card:hover {
+  border: none;
+  box-shadow: none;
+}
+.tl-content { padding-bottom: 10px; }

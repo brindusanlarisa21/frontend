@@ -478,7 +478,7 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
             </div>
           )}
 
-          <div className={showMap ? 'hide-on-mobile' : undefined} style={{ height: 460, overflowY: 'auto', paddingRight: 6 }}>
+          <div className={`tl-scroll${showMap ? ' hide-on-mobile' : ''}`}>
           {status === 'loading' && <div style={{ padding: '20px 0', color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>}
           {status === 'failed' && <div className="auth-error" style={{ marginTop: 16 }}>{error}</div>}
 
