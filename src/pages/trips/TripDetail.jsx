@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import {
   House, CalendarDays, Wallet, MessageCircle, Users, Sparkles, ChartColumn,
-  Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2,
+  Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2, Navigation,
 } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
@@ -339,6 +339,21 @@ const CAT_UI = {
   transit: { emoji: '🚌', Icon: Bus,             bg: 'rgba(156,163,175,.12)', color: '#6b7280', stripe: '#9ca3af' },
 }
 
+/**
+ * Where to send someone who wants directions. Coordinates win when we have
+ * them — a place name can be ambiguous — and the URL opens the native app on
+ * a phone, the website on a desktop.
+ */
+function mapsUrl({ latitude, longitude, location }) {
+  if (latitude != null && longitude != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+  }
+  if (location) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`
+  }
+  return null
+}
+
 function formatWeekRange({ from, to }) {
   const opts = { day: 'numeric', month: 'short' }
   const a = new Date(`${from}T00:00:00`).toLocaleDateString('ro-RO', opts)
@@ -402,8 +417,23 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   const totalCost = visibleItems.reduce((s, a) => s + (a.cost || 0), 0)
   const todayKey = dayKey(new Date().toISOString())
 
-  const todayItems = items
-    .filter((a) => dayKey(a.startTime) === todayKey)
+  // Today when there is something on, otherwise the next day that has anything —
+  // before a trip starts, "today" is always empty and the panel would sit blank.
+  const upcomingDay = (() => {
+    const byDay = new Map()
+    for (const a of items) {
+      const key = dayKey(a.startTime)
+      if (!byDay.has(key)) byDay.set(key, [])
+      byDay.get(key).push(a)
+    }
+    if (byDay.has(todayKey)) return { key: todayKey, isToday: true, items: byDay.get(todayKey) }
+
+    const next = [...byDay.keys()].filter((k) => k > todayKey).sort()[0]
+    return next ? { key: next, isToday: false, items: byDay.get(next) } : null
+  })()
+
+  const todayItems = (upcomingDay?.items ?? [])
+    .slice()
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
 
   return (
@@ -550,20 +580,33 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
                                     )}
                                   </div>
                                 </div>
-                                {canEdit && (
-                                  <div className="tl-actions">
-                                    <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
-                                      <Pencil size={13} strokeWidth={2.2} />
-                                    </button>
-                                    <button
-                                      className="icon-btn-sm" title="Șterge"
-                                      disabled={deletingId === a.id}
-                                      onClick={() => handleDelete(a.id)}
+                                <div className="tl-actions">
+                                  {mapsUrl(a) && (
+                                    <a
+                                      className="icon-btn-sm tl-nav"
+                                      href={mapsUrl(a)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title={`Deschide ${a.location ?? 'locația'} în hărți`}
                                     >
-                                      <Trash2 size={13} strokeWidth={2.2} />
-                                    </button>
-                                  </div>
-                                )}
+                                      <Navigation size={13} strokeWidth={2.2} />
+                                    </a>
+                                  )}
+                                  {canEdit && (
+                                    <>
+                                      <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
+                                        <Pencil size={13} strokeWidth={2.2} />
+                                      </button>
+                                      <button
+                                        className="icon-btn-sm" title="Șterge"
+                                        disabled={deletingId === a.id}
+                                        onClick={() => handleDelete(a.id)}
+                                      >
+                                        <Trash2 size={13} strokeWidth={2.2} />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </li>
@@ -590,7 +633,11 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
         {/* What is on today, regardless of which week the timeline shows */}
         {todayItems.length > 0 && (
           <div>
-            <div className="kicker" style={{ marginBottom: 10 }}>Ziua de azi</div>
+            <div className="kicker" style={{ marginBottom: 10 }}>
+              {upcomingDay.isToday
+                ? 'Ziua de azi'
+                : `Urmează · ${new Date(`${upcomingDay.key}T00:00:00`).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' })}`}
+            </div>
             {todayItems.slice(0, 4).map((a) => {
               const cat = CAT_UI[a.category?.toLowerCase()] || CAT_UI.sight
               return (
