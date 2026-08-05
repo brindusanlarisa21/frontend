@@ -12,16 +12,21 @@ function Register() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [registered, setRegistered] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     dispatch(clearAuthError())
     const result = await dispatch(register({ name, email, password }))
-    if (register.fulfilled.match(result)) {
+    if (!register.fulfilled.match(result)) return
+
+    if (result.payload.emailVerified) {
       // Someone who arrived from an invite link goes back to it after signing up.
       const pendingInvite = localStorage.getItem('pendingInvite')
       navigate(pendingInvite ? `/invite/${pendingInvite}` : '/')
+      return
     }
+    setRegistered(true)
   }
 
   return (
@@ -51,6 +56,23 @@ function Register() {
             <button className="auth-seg-btn active">Cont nou</button>
           </div>
           {error && <div className="auth-error"><span>⚠</span> {error}</div>}
+
+          {registered ? (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>✉</div>
+              <div style={{ font: '800 19px/1.3 Archivo, sans-serif', color: 'var(--ink)', marginBottom: 10 }}>
+                Verifică-ți emailul
+              </div>
+              <div style={{ font: '400 14px/1.6 Archivo, sans-serif', color: 'var(--text-muted)', marginBottom: 18 }}>
+                Am trimis un link de confirmare la <b style={{ color: 'var(--ink)' }}>{email}</b>.
+                Apasă-l ca să-ți activezi contul. Dacă nu apare în câteva minute,
+                caută și în spam.
+              </div>
+              <Link to="/login" className="btn-secondary" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+                Înapoi la autentificare
+              </Link>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label className="input-label">Nume</label>
@@ -72,6 +94,7 @@ function Register() {
               <Link to="/login" style={{ fontWeight: 800, color: 'var(--blue-700)' }}>Intră în cont</Link>
             </div>
           </form>
+          )}
         </div>
       </div>
     </div>

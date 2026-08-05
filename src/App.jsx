@@ -9,6 +9,7 @@ import ResetPassword from './pages/auth/ResetPassword'
 import ProtectedRoute from './routes/ProtectedRoute'
 import Profile from './pages/Profile'
 import JoinTrip from './pages/JoinTrip'
+import VerifyEmail from './pages/auth/VerifyEmail'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/invite/:token" element={<JoinTrip />} />
 
       <Route element={<ProtectedRoute />}>

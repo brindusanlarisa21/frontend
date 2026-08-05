@@ -121,6 +121,9 @@ const authSlice = createSlice({
       })
       .addCase(register.fulfilled, (state, action) => {
         state.status = 'succeeded'
+        // A brand new account has not confirmed its address yet, so no session
+        // is started — the user is sent to their inbox instead.
+        if (!action.payload.emailVerified) return
         const { name, email } = action.payload
         state.user = { name, email }
         state.token = action.payload.token

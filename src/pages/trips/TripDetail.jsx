@@ -1,6 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
-import { House, CalendarDays, Wallet, MessageCircle, Users, Sparkles, ChartColumn } from 'lucide-react'
+import {
+  House, CalendarDays, Wallet, MessageCircle, Users, Sparkles, ChartColumn,
+  Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2,
+} from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../../features/auth/authSlice'
@@ -10,7 +13,7 @@ import {
   BalanceHero, ExpenseRow, SettleUpRow,
 } from '../../components/ds'
 import { fetchTripById, updateTrip, addTripMember, removeTripMember, clearMemberActionError } from '../../features/trips/tripsSlice'
-import { fetchActivities, createActivity, deleteActivity, clearActivityActionError } from '../../features/activities/activitiesSlice'
+import { fetchActivities, createActivity, updateActivity, deleteActivity, clearActivityActionError } from '../../features/activities/activitiesSlice'
 import { fetchExpenses, createExpense, updateExpense, deleteExpense, fetchBalances, settleDebt, createSettlement, clearExpenseActionError } from '../../features/expenses/expensesSlice'
 import { fetchMessages, messageReceived, clearMessages } from '../../features/chat/chatSlice'
 import { fetchProposals, createProposal, voteProposal, proposalReceived, proposalUpdated, clearProposals } from '../../features/proposals/proposalsSlice'
@@ -191,11 +194,6 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function formatDayPill(key) {
-  const d = new Date(`${key}T00:00:00`)
-  return { weekday: d.toLocaleDateString('en-US', { weekday: 'short' }), day: d.getDate() }
-}
-
 function buildDayRange(start, end) {
   const days = []
   const cursor = new Date(`${dayKey(start)}T00:00:00`)
@@ -212,23 +210,34 @@ const CAT_LABELS = {
   travel: 'Drum', fun: 'Distracție', transit: 'Transport',
 }
 
-function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate }) {
-  const [title, setTitle] = useState('')
-  const [place, setPlace] = useState(null)
-  const [category, setCategory] = useState('sight')
-  const [date, setDate] = useState(defaultDate)
-  const [time, setTime] = useState('09:00')
+function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate, initial }) {
+  const start = initial?.startTime ? new Date(initial.startTime) : null
+  const pad = (n) => String(n).padStart(2, '0')
+
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [place, setPlace] = useState(
+    initial?.location ? { location: initial.location, latitude: initial.latitude, longitude: initial.longitude } : null,
+  )
+  const [category, setCategory] = useState(initial?.category?.toLowerCase() ?? 'sight')
+  const [cost, setCost] = useState(initial?.cost != null ? String(initial.cost) : '')
+  const [date, setDate] = useState(start ? start.toLocaleDateString('en-CA') : defaultDate)
+  const [time, setTime] = useState(start ? `${pad(start.getHours())}:${pad(start.getMinutes())}` : '09:00')
+  const [duration, setDuration] = useState(
+    initial?.endTime ? String(Math.round((new Date(initial.endTime) - start) / 60000)) : '',
+  )
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!title.trim() || !date || !time) return
+    const startsAt = new Date(`${date}T${time}`)
+    const minutes = duration.trim() ? Number(duration) : null
     onSubmit({
       title: title.trim(),
       description: null,
       category,
-      cost: null,
-      startTime: new Date(`${date}T${time}`).toISOString(),
-      endTime: null,
+      cost: cost.trim() ? Number(cost) : null,
+      startTime: startsAt.toISOString(),
+      endTime: minutes ? new Date(startsAt.getTime() + minutes * 60000).toISOString() : null,
       location: place?.location ?? null,
       latitude: place?.latitude ?? null,
       longitude: place?.longitude ?? null,
@@ -244,6 +253,11 @@ function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate }) {
         </div>
 
         <LocationSearch label="Loc" onSelect={setPlace} />
+        {place?.location && (
+          <div style={{ font: '400 12px/1 Archivo, sans-serif', color: 'var(--text-muted)', marginTop: -8 }}>
+            Loc curent: <b style={{ color: 'var(--ink)' }}>{place.location}</b>
+          </div>
+        )}
 
         <div>
           <label className="input-label">Categorie</label>
@@ -273,6 +287,17 @@ function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate }) {
           </div>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label className="input-label">Durată (minute)</label>
+            <input className="input-field" type="number" min="0" step="15" placeholder="ex. 90" value={duration} onChange={(e) => setDuration(e.target.value)} />
+          </div>
+          <div>
+            <label className="input-label">Cost / persoană</label>
+            <input className="input-field" type="number" min="0" step="0.01" placeholder="ex. 14" value={cost} onChange={(e) => setCost(e.target.value)} />
+          </div>
+        </div>
+
         {error && <div className="auth-error"><span>⚠</span> {error}</div>}
       </div>
 
@@ -286,42 +311,61 @@ function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate }) {
   )
 }
 
-function AddActivityModal({ open, onClose, onSubmit, submitting, error, defaultDate }) {
+function ActivityModal({ open, onClose, onSubmit, submitting, error, defaultDate, initial }) {
   if (!open) return null
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box">
         <div className="modal-header">
-          <span className="modal-title">Adaugă o activitate</span>
+          <span className="modal-title">{initial ? 'Editează activitatea' : 'Adaugă o activitate'}</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
         </div>
-        <ActivityForm key={defaultDate} onClose={onClose} onSubmit={onSubmit} submitting={submitting} error={error} defaultDate={defaultDate} />
+        <ActivityForm
+          key={initial?.id ?? defaultDate}
+          onClose={onClose} onSubmit={onSubmit} submitting={submitting} error={error}
+          defaultDate={defaultDate} initial={initial}
+        />
       </div>
     </div>
   )
 }
 
 const CAT_UI = {
-  sight:   { emoji: '🏛', bg: 'rgba(31,111,235,.12)', color: '#1f6feb', stripe: '#1f6feb' },
-  food:    { emoji: '🍽', bg: 'rgba(255,122,69,.12)', color: '#ff7a45', stripe: '#ff7a45' },
-  stay:    { emoji: '🛏', bg: 'rgba(15,155,142,.12)', color: '#0f9b8e', stripe: '#0f9b8e' },
-  travel:  { emoji: '✈', bg: 'rgba(31,111,235,.12)', color: '#1f6feb', stripe: '#1f6feb' },
-  fun:     { emoji: '🎟', bg: 'rgba(124,58,237,.12)', color: '#7c3aed', stripe: '#7c3aed' },
-  transit: { emoji: '🚌', bg: 'rgba(156,163,175,.12)', color: '#6b7280', stripe: '#9ca3af' },
+  sight:   { emoji: '🏛', Icon: Landmark,        bg: 'rgba(31,111,235,.12)',  color: '#1f6feb', stripe: '#1f6feb' },
+  food:    { emoji: '🍽', Icon: UtensilsCrossed, bg: 'rgba(255,122,69,.12)',  color: '#ff7a45', stripe: '#ff7a45' },
+  stay:    { emoji: '🛏', Icon: BedDouble,       bg: 'rgba(15,155,142,.12)',  color: '#0f9b8e', stripe: '#0f9b8e' },
+  travel:  { emoji: '✈', Icon: Plane,           bg: 'rgba(31,111,235,.12)',  color: '#1f6feb', stripe: '#1f6feb' },
+  fun:     { emoji: '🎟', Icon: Ticket,          bg: 'rgba(124,58,237,.12)',  color: '#7c3aed', stripe: '#7c3aed' },
+  transit: { emoji: '🚌', Icon: Bus,             bg: 'rgba(156,163,175,.12)', color: '#6b7280', stripe: '#9ca3af' },
 }
 
-function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEmail, isAdmin }) {
+function formatWeekRange({ from, to }) {
+  const opts = { day: 'numeric', month: 'short' }
+  const a = new Date(`${from}T00:00:00`).toLocaleDateString('ro-RO', opts)
+  const b = new Date(`${to}T00:00:00`).toLocaleDateString('ro-RO', opts)
+  return from === to ? a : `${a} – ${b}`
+}
+
+/** Groups a trip's days into weeks of seven, counted from the start date. */
+function buildWeeks(dayKeys) {
+  const weeks = []
+  for (let i = 0; i < dayKeys.length; i += 7) {
+    const days = dayKeys.slice(i, i + 7)
+    weeks.push({ index: weeks.length + 1, days, from: days[0], to: days[days.length - 1] })
+  }
+  return weeks
+}
+
+function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEmail, isAdmin, currency = 'EUR' }) {
   const dispatch = useDispatch()
   const { items, status, error, actionStatus, actionError } = useSelector((state) => state.activities)
   const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [selectedWeek, setSelectedWeek] = useState('all')
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
 
   const dayRange = buildDayRange(tripStartDate, tripEndDate)
-  const [selectedDay, setSelectedDay] = useState(() => {
-    const todayKey = dayKey(new Date().toISOString())
-    return dayRange.includes(todayKey) ? todayKey : (dayRange[0] || todayKey)
-  })
 
   useEffect(() => { dispatch(fetchActivities(tripId)) }, [dispatch, tripId])
 
@@ -329,50 +373,16 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   // main column instead of sitting under the timeline.
   const [showMap, setShowMap] = useState(false)
 
-  // Horizontal day strip: arrows page through days when they overflow.
-  const dayStripRef = useRef(null)
-  const [dayScroll, setDayScroll] = useState({ overflows: false, atStart: true, atEnd: false })
-
-  useEffect(() => {
-    const el = dayStripRef.current
-    if (!el) return
-
-    const sync = () => {
-      const overflows = el.scrollWidth > el.clientWidth + 1
-      setDayScroll({
-        overflows,
-        atStart: el.scrollLeft <= 1,
-        atEnd: el.scrollLeft + el.clientWidth >= el.scrollWidth - 1,
-      })
-    }
-
-    sync()
-    el.addEventListener('scroll', sync, { passive: true })
-    // The strip's width depends on the panel split, not just the window.
-    const observer = new ResizeObserver(sync)
-    observer.observe(el)
-    return () => {
-      el.removeEventListener('scroll', sync)
-      observer.disconnect()
-    }
-  }, [dayRange.length])
-
-  const scrollDays = (dir) => {
-    const el = dayStripRef.current
-    if (el) el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.8, 120), behavior: 'smooth' })
-  }
-
-  // Keep the chosen day visible when it sits outside the current window.
-  useEffect(() => {
-    const el = dayStripRef.current
-    if (!el) return
-    el.querySelector('.day-pill.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
-  }, [selectedDay])
-
   const handleAdd = async (activity) => {
     dispatch(clearActivityActionError())
     const result = await dispatch(createActivity({ tripId, activity }))
     if (createActivity.fulfilled.match(result)) setModalOpen(false)
+  }
+
+  const handleEdit = async (activity) => {
+    dispatch(clearActivityActionError())
+    const result = await dispatch(updateActivity({ tripId, activityId: editing.id, activity }))
+    if (updateActivity.fulfilled.match(result)) setEditing(null)
   }
 
   const handleDelete = async (activityId) => {
@@ -381,57 +391,58 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
     setDeletingId(null)
   }
 
-  const dayItems = items
-    .filter((a) => dayKey(a.startTime) === selectedDay)
+  const weeks = buildWeeks(dayRange)
+  const visibleWeeks = selectedWeek === 'all' ? weeks : weeks.filter((w) => w.index === selectedWeek)
+  const visibleDays = visibleWeeks.flatMap((w) => w.days)
+
+  const visibleItems = items
+    .filter((a) => visibleDays.includes(dayKey(a.startTime)))
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
 
-  const totalCost = dayItems.reduce((s, a) => s + (a.cost || 0), 0)
+  const totalCost = visibleItems.reduce((s, a) => s + (a.cost || 0), 0)
   const todayKey = dayKey(new Date().toISOString())
 
   return (
     <div className="split tall-main" style={{ '--side-w': '560px' }}>
       {/* ---- Main: day picker + timeline ---- */}
       <div className="split-main">
-        {/* Day pills */}
+        {/* Week pills */}
         <div className="day-picker-wrap">
-          {dayScroll.overflows && (
-          <button className="day-nav" onClick={() => scrollDays(-1)} disabled={dayScroll.atStart} aria-label="Zilele anterioare">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          )}
-          <div className="day-picker" ref={dayStripRef}>
-          {dayRange.map((key) => {
-            const { weekday, day } = formatDayPill(key)
-            const isToday = key === todayKey
-            return (
-              <button
-                key={key}
-                className={`day-pill${selectedDay === key ? ' active' : ''}`}
-                onClick={() => setSelectedDay(key)}
-              >
-                <span className="day-pill-wd">{weekday}</span>
-                <span className="day-pill-d">{day}</span>
-                {isToday && <span style={{ font: '800 8px/1 Archivo, sans-serif', letterSpacing: '.06em', color: selectedDay === key ? 'rgba(255,255,255,.7)' : 'var(--blue-500)', marginTop: 1 }}>AZI</span>}
-              </button>
-            )
-          })}
+          <div className="day-picker">
+            <button
+              className={`day-pill week-pill${selectedWeek === 'all' ? ' active' : ''}`}
+              onClick={() => setSelectedWeek('all')}
+            >
+              <span className="day-pill-wd">Toate</span>
+              <span className="day-pill-d">{items.length}</span>
+            </button>
+            {weeks.map((w) => {
+              const count = items.filter((a) => w.days.includes(dayKey(a.startTime))).length
+              return (
+                <button
+                  key={w.index}
+                  className={`day-pill week-pill${selectedWeek === w.index ? ' active' : ''}`}
+                  onClick={() => setSelectedWeek(w.index)}
+                >
+                  <span className="day-pill-wd">Săpt. {w.index}</span>
+                  <span className="day-pill-d">{count}</span>
+                </button>
+              )
+            })}
           </div>
-          {dayScroll.overflows && (
-          <button className="day-nav" onClick={() => scrollDays(1)} disabled={dayScroll.atEnd} aria-label="Zilele următoare">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-          )}
         </div>
 
-        {/* Day heading */}
+        {/* Heading */}
         <div className="day-section">
           <div className="day-heading">
             <span className="day-heading-title">
-              {new Date(`${selectedDay}T00:00:00`).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {selectedWeek === 'all'
+                ? 'Tot planul'
+                : `Săptămâna ${selectedWeek}`}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {dayItems.length > 0 && (
-                <span className="day-heading-meta">{dayItems.length} PLANURI{totalCost > 0 ? ` · ${totalCost} € EST.` : ''}</span>
+              {visibleItems.length > 0 && (
+                <span className="day-heading-meta">{visibleItems.length} PLANURI{totalCost > 0 ? ` · ${totalCost} € EST.` : ''}</span>
               )}
               <button
                 className="btn-secondary mobile-only"
@@ -464,62 +475,102 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
           )}
 
           <div className={showMap ? 'hide-on-mobile' : undefined} style={{ height: 460, overflowY: 'auto', paddingRight: 6 }}>
-          {status === 'loading' &&<div style={{ padding: '20px 0', color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>}
+          {status === 'loading' && <div style={{ padding: '20px 0', color: 'var(--text-muted)', fontSize: 14 }}>Se încarcă…</div>}
           {status === 'failed' && <div className="auth-error" style={{ marginTop: 16 }}>{error}</div>}
 
-          {status === 'succeeded' && dayItems.length === 0 && (
+          {status === 'succeeded' && visibleItems.length === 0 && (
             <div style={{ padding: '40px 0', textAlign: 'center' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 14 }}>Nicio activitate planificată pentru această zi.</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 14 }}>
+                {selectedWeek === 'all'
+                  ? 'Nicio activitate planificată încă.'
+                  : `Nimic planificat în săptămâna ${selectedWeek}.`}
+              </div>
               <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setModalOpen(true)}>+ Adaugă activitate</button>
             </div>
           )}
 
-          {/* Activity timeline */}
-          {dayItems.map((a) => {
-            const cat = CAT_UI[a.category?.toLowerCase()] || CAT_UI.sight
-            const canDelete = isAdmin || a.createdByUserId === currentUserId
-            return (
-              <div key={a.id} className="activity-row">
-                {/* Time column */}
-                <div className="activity-time">
-                  <div className="activity-time-hour">
-                    {new Date(a.startTime).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                  {a.endTime && (
-                    <div className="activity-time-dur">
-                      {Math.round((new Date(a.endTime) - new Date(a.startTime)) / 60000)} MIN
-                    </div>
-                  )}
-                </div>
+          {/* Vertical timeline, grouped by week and then by day */}
+          {visibleWeeks.map((week) => (
+            <section key={week.index} className="tl-week">
+              <header className="tl-week-head">
+                <span className="tl-week-title">Săptămâna {week.index}</span>
+                <span className="tl-week-range">{formatWeekRange(week)}</span>
+              </header>
 
-                {/* Activity card */}
-                <div className="activity-card" style={{ flex: 1 }}>
-                  <div className="activity-card-stripe" style={{ background: cat.stripe }} />
-                  <div className={`activity-icon-wrap`} style={{ background: cat.bg, color: cat.color }}>
-                    {cat.emoji}
-                  </div>
-                  <div className="activity-info">
-                    <div className="activity-title">{a.title}</div>
-                    <div className="activity-meta">
-                      {a.location && <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.5 8 12 8 12s8-6.5 8-12a8 8 0 0 0-8-8z"/></svg> {a.location}</>}
-                      {a.cost != null && <><span>·</span><span style={{ color: cat.color, fontWeight: 800 }}>{a.cost} € / pers</span></>}
+              {week.days.map((dk) => {
+                const ofDay = items
+                  .filter((a) => dayKey(a.startTime) === dk)
+                  .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+                if (ofDay.length === 0) return null
+
+                return (
+                  <div key={dk} className="tl-day">
+                    <div className={`tl-day-label${dk === todayKey ? ' is-today' : ''}`}>
+                      {new Date(`${dk}T00:00:00`).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {dk === todayKey && <span className="tl-today-badge">AZI</span>}
                     </div>
+
+                    <ol className="tl">
+                      {ofDay.map((a, i) => {
+                        const cat = CAT_UI[a.category?.toLowerCase()] || CAT_UI.sight
+                        const Icon = cat.Icon
+                        const canEdit = isAdmin || a.createdByUserId === currentUserId
+                        return (
+                          <li key={a.id} className="tl-item">
+                            <div className="tl-opposite">
+                              <span className="tl-time">
+                                {new Date(a.startTime).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              {a.endTime && (
+                                <span className="tl-duration">
+                                  {Math.round((new Date(a.endTime) - new Date(a.startTime)) / 60000)}′
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="tl-separator">
+                              <span className="tl-dot" style={{ background: cat.bg, color: cat.color, borderColor: cat.stripe }}>
+                                <Icon size={16} strokeWidth={2.1} />
+                              </span>
+                              {i < ofDay.length - 1 && <span className="tl-connector" />}
+                            </div>
+
+                            <div className="tl-content">
+                              <div className="tl-card">
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div className="tl-title">{a.title}</div>
+                                  <div className="tl-meta">
+                                    {a.location && <span>{a.location}</span>}
+                                    {a.cost != null && (
+                                      <span style={{ color: cat.color, fontWeight: 800 }}>{a.cost} {currency} / pers</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {canEdit && (
+                                  <div className="tl-actions">
+                                    <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
+                                      <Pencil size={13} strokeWidth={2.2} />
+                                    </button>
+                                    <button
+                                      className="icon-btn-sm" title="Șterge"
+                                      disabled={deletingId === a.id}
+                                      onClick={() => handleDelete(a.id)}
+                                    >
+                                      <Trash2 size={13} strokeWidth={2.2} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ol>
                   </div>
-                  {canDelete && (
-                    <button
-                      className="icon-btn-sm"
-                      disabled={deletingId === a.id}
-                      onClick={() => handleDelete(a.id)}
-                      title="Șterge"
-                      style={{ flexShrink: 0 }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+                )
+              })}
+            </section>
+          ))}
           </div>
         </div>
       </div>
@@ -553,10 +604,16 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
         </div>
       </div>
 
-      <AddActivityModal
+      <ActivityModal
         open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleAdd}
         submitting={actionStatus === 'loading'} error={actionError}
-        defaultDate={selectedDay}
+        defaultDate={dayRange[0]}
+      />
+
+      <ActivityModal
+        open={editing !== null} onClose={() => setEditing(null)} onSubmit={handleEdit}
+        submitting={actionStatus === 'loading'} error={actionError}
+        defaultDate={dayRange[0]} initial={editing}
       />
     </div>
   )
@@ -2866,6 +2923,7 @@ function TripDetail() {
             <Itinerary
               tripId={trip.id} tripStartDate={trip.startDate} tripEndDate={trip.endDate}
               members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin}
+              currency={trip.currency}
             />
           )}
           {tab === 'expenses' && (

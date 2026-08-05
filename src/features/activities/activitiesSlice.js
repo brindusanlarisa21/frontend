@@ -27,6 +27,21 @@ export const createActivity = createAsyncThunk(
   },
 )
 
+export const updateActivity = createAsyncThunk(
+  'activities/updateActivity',
+  async ({ tripId, activityId, activity }, { getState, rejectWithValue }) => {
+    try {
+      return await apiRequest(`/trips/${tripId}/activities/${activityId}`, {
+        method: 'PUT',
+        body: activity,
+        token: getState().auth.token,
+      })
+    } catch (err) {
+      return rejectWithValue(err.message)
+    }
+  },
+)
+
 export const deleteActivity = createAsyncThunk(
   'activities/deleteActivity',
   async ({ tripId, activityId }, { getState, rejectWithValue }) => {
@@ -82,6 +97,20 @@ const activitiesSlice = createSlice({
         state.items.push(action.payload)
       })
       .addCase(createActivity.rejected, (state, action) => {
+        state.actionStatus = 'failed'
+        state.actionError = action.payload
+      })
+
+      .addCase(updateActivity.pending, (state) => {
+        state.actionStatus = 'loading'
+        state.actionError = null
+      })
+      .addCase(updateActivity.fulfilled, (state, action) => {
+        state.actionStatus = 'succeeded'
+        const i = state.items.findIndex((a) => a.id === action.payload.id)
+        if (i !== -1) state.items[i] = action.payload
+      })
+      .addCase(updateActivity.rejected, (state, action) => {
         state.actionStatus = 'failed'
         state.actionError = action.payload
       })
