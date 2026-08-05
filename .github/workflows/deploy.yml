@@ -1,0 +1,43 @@
+name: Build and deploy the frontend
+
+# The bundle is static, so it is built here and copied to the server. Building
+# on the 1 GB instance is not worth the trouble.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          # Baked into the bundle, so it must be the deployed API URL.
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: npm run build
+
+      - name: Copy the bundle to the server
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # Into the directory, never replacing it — the container's bind mount
+          # follows the original inode and would start serving 404s.
+          scp -i ~/.ssh/deploy -r dist/* "$SSH_USER@$SSH_HOST:~/TripSplit/frontend-dist/"
