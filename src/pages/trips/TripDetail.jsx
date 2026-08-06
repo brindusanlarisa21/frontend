@@ -2954,7 +2954,7 @@ function TripDetail() {
   return (
     <>
       <AppRail user={user} activeTab={tab} onTabChange={setTab} showRecap={phase === 'Completed'} />
-      <div className="app-content">
+      <div className="app-content workspace-content">
         {/* ---- Workspace header ---- */}
         <div className="workspace-header">
           <div className="workspace-breadcrumb">
@@ -2989,7 +2989,7 @@ function TripDetail() {
         </div>
 
         {/* ---- Tab content ---- */}
-        <div key={tab}>
+        <div key={tab} className="tab-content">
           {tab === 'itinerary' && (
             <Itinerary
               tripId={trip.id} tripStartDate={trip.startDate} tripEndDate={trip.endDate}

@@ -1796,3 +1796,42 @@ input, textarea, select { font-family: inherit; }
     height: auto;
   }
 }
+
+/* ============================================================
+   TRIP WORKSPACE ON PHONES
+   The header is measured rather than guessed: the content column is the
+   viewport, the header keeps its natural size and the active tab takes
+   the rest. Every pane below then sizes to 100% of what it is given,
+   which is why none of them carry a magic pixel offset any more.
+   ============================================================ */
+@media (max-width: 1024px) {
+  .workspace-content {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  }
+  .workspace-content > .workspace-header { flex-shrink: 0; }
+  .workspace-content > .tab-content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Panes fill the tab, whatever height that turned out to be. */
+  .workspace-content .chat-pane,
+  .workspace-content .split-fixed .split-main,
+  .workspace-content .plan-split,
+  .workspace-content .money-split,
+  .workspace-content .members-split {
+    height: 100%;
+    min-height: 0;
+  }
+  .workspace-content .chat-pane { margin-bottom: 0; }
+
+  /* Tabs that flow rather than fill, such as the recap, scroll inside the tab
+     instead of the page. */
+  .workspace-content > .tab-content { overflow-y: auto; }
+}
