@@ -83,7 +83,7 @@ export const updateChecklistItem = createAsyncThunk(
     try {
       return await apiRequest(`/trips/${tripId}/checklist/${itemId}`, {
         method: 'PUT',
-        body: { text: null, done: null, assignedUserId: null, ...changes },
+        body: { text: null, done: null, assignedUserId: null, unassign: null, ...changes },
         ...withToken(getState),
       })
     } catch (err) {

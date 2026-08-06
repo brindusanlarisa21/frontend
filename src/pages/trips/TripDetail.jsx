@@ -1976,7 +1976,12 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
     setNewTask('')
   }
 
-  const doneCount = checklist.filter((c) => c.done).length
+  // Only what concerns you: shared items and the ones assigned to you. Someone
+  // else's packing list is noise on a screen this small.
+  const myChecklist = checklist.filter(
+    (c) => c.assignedUserId == null || c.assignedUserId === currentUserId,
+  )
+  const doneCount = myChecklist.filter((c) => c.done).length
 
   const handleInvite = async (email) => {
     if (!email) return
@@ -2117,7 +2122,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
 
         {/* Checklist */}
         <CollapsibleSection
-          title={`Checklist · ${doneCount} din ${checklist.length}`}
+          title={`Checklist · ${doneCount} din ${myChecklist.length}`}
           className="members-section members-section-last"
           open={openSection === 'checklist'}
           onToggle={(next) => setOpenSection(next ? 'checklist' : null)}
@@ -2133,11 +2138,11 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
           </form>
 
           <div className="pane-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
-          {checklist.length === 0 ? (
+          {myChecklist.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
               Niciun element în checklist. Adaugă bagaje comune sau personale.
             </div>
-          ) : checklist.map((c) => (
+          ) : myChecklist.map((c) => (
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
               <input
                 type="checkbox" className="checkbox-light" checked={c.done}
@@ -2148,10 +2153,15 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
               </span>
               <select
                 value={c.assignedUserId ?? ''}
-                onChange={(e) => dispatch(updateChecklistItem({ tripId, itemId: c.id, changes: { assignedUserId: e.target.value ? Number(e.target.value) : currentUserId } }))}
+                onChange={(e) => dispatch(updateChecklistItem({
+                  tripId, itemId: c.id,
+                  changes: e.target.value
+                    ? { assignedUserId: Number(e.target.value) }
+                    : { unassign: true },
+                }))}
                 style={{ border: 'none', background: 'none', font: '800 11px/1 Archivo, sans-serif', color: 'var(--text-muted)', cursor: 'pointer', maxWidth: 100 }}
               >
-                <option value="">Oricine</option>
+                <option value="">Toți</option>
                 {members.map((m) => <option key={m.userId} value={m.userId}>{m.name.split(' ')[0]}</option>)}
               </select>
               <button className="icon-btn-sm" title="Șterge" style={{ flexShrink: 0 }} onClick={() => dispatch(deleteChecklistItem({ tripId, itemId: c.id }))}>
