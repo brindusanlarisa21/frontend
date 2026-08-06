@@ -445,9 +445,9 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
 
   return (
-    <div className="split tall-main" style={{ '--side-w': '560px' }}>
-      {/* ---- Main: day picker + timeline ---- */}
-      <div className="split-main">
+    <div className="split tall-main plan-split" style={{ '--side-w': '560px' }}>
+      {/* ---- Main: week picker + timeline ---- */}
+      <div className="split-main plan-main">
         {/* Week pills */}
         <div className="day-picker-wrap">
           <div className="day-picker">

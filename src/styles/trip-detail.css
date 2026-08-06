@@ -1766,3 +1766,33 @@ input, textarea, select { font-family: inherit; }
 }
 .tl-nav:hover { color: var(--blue-700); }
 
+
+/* On the stacked layout the plan is bounded to the viewport and the timeline
+   takes whatever the week pills and the day heading leave, so it reaches the
+   tab bar instead of stopping short with dead space under it. */
+@media (max-width: 1024px) {
+  .plan-split {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 178px);
+  }
+  .plan-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-bottom: none;
+  }
+  /* .day-section wraps the heading and the scroller. */
+  .plan-main > .day-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .plan-main .tl-scroll {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
+}
