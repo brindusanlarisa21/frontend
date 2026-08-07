@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { apiRequest } from '../../api/client'
+import { API_BASE } from '../../api/config'
 
 const withToken = (getState) => ({ token: getState().auth.token })
 
@@ -132,6 +133,39 @@ export const addDocument = createAsyncThunk(
   },
 )
 
+/**
+ * Uploads a real file. Goes through fetch directly rather than apiRequest,
+ * which sets a JSON content type — multipart needs the browser to set its own
+ * boundary, so the header must be left alone.
+ */
+export const uploadDocument = createAsyncThunk(
+  'group/uploadDocument',
+  async ({ tripId, file, title, kind, note, activityId, ownerUserId, expiresAt }, { getState, rejectWithValue }) => {
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      if (title) form.append('title', title)
+      if (kind) form.append('kind', kind)
+      if (note) form.append('note', note)
+      if (activityId) form.append('activityId', String(activityId))
+      if (ownerUserId) form.append('ownerUserId', String(ownerUserId))
+      if (expiresAt) form.append('expiresAt', expiresAt)
+
+      const res = await fetch(`${API_BASE}/trips/${tripId}/documents/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getState().auth.token}` },
+        body: form,
+      })
+
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.message ?? 'Încărcarea a eșuat.')
+      return data
+    } catch (err) {
+      return rejectWithValue(err.message)
+    }
+  },
+)
+
 export const updateDocument = createAsyncThunk(
   'group/updateDocument',
   async ({ tripId, documentId, document }, { getState, rejectWithValue }) => {
@@ -225,6 +259,7 @@ const groupSlice = createSlice({
         state.error = action.payload
       })
       .addCase(addDocument.fulfilled, (state, action) => { state.documents.push(action.payload) })
+      .addCase(uploadDocument.fulfilled, (state, action) => { state.documents.push(action.payload) })
       .addCase(updateDocument.fulfilled, (state, action) => {
         const i = state.documents.findIndex((d) => d.id === action.payload.id)
         if (i !== -1) state.documents[i] = action.payload

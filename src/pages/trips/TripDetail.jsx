@@ -1,11 +1,11 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import {
   House, CalendarDays, Wallet, MessageCircle, Users, Sparkles, ChartColumn,
   Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2,
   // Aliased: `Navigation` is also a DOM global, and the bare name resolves to
   // the browser interface, which throws when React calls it as a component.
-  Navigation as NavigationIcon,
+  Navigation as NavigationIcon, Paperclip, FileText,
 } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
@@ -23,7 +23,7 @@ import { fetchProposals, createProposal, voteProposal, proposalReceived, proposa
 import {
   fetchInvite, createInvite,
   fetchChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem,
-  fetchDocuments, addDocument, deleteDocument,
+  fetchDocuments, addDocument, uploadDocument, updateDocument, deleteDocument,
 } from '../../features/group/groupSlice'
 import { apiRequest } from '../../api/client'
 import { API_ORIGIN } from '../../api/config'
@@ -352,6 +352,45 @@ function mapsUrl({ latitude, longitude, location }) {
   return null
 }
 
+/** True when the document carries a file we can open, uploaded or linked. */
+const hasFile = (doc) => Boolean(doc && (doc.originalFileName || doc.fileUrl))
+
+/**
+ * Opens a document in a new tab. Uploaded files sit behind the API's
+ * membership check, so they need the token — which a plain <a href> cannot
+ * carry. The tab is opened before the request so the browser still counts it
+ * as a click and does not swallow it as a popup.
+ */
+async function openDocument(tripId, doc, token) {
+  if (!doc.originalFileName) {
+    if (doc.fileUrl) window.open(doc.fileUrl, '_blank', 'noopener')
+    return
+  }
+
+  const tab = window.open('', '_blank')
+  try {
+    const res = await fetch(`${API_ORIGIN}/api/trips/${tripId}/documents/${doc.id}/file`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Fișierul nu a putut fi deschis.')
+    const url = URL.createObjectURL(await res.blob())
+    if (tab) tab.location = url
+    else window.open(url, '_blank', 'noopener')
+    // The tab holds its own reference by now; free ours after it has loaded.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    tab?.close()
+    alert(err.message)
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes == null) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /** "45 min", "2 h", "1 h 30" — plainer than a raw minute count. */
 function formatDuration(minutes) {
   const m = Math.round(minutes)
@@ -386,11 +425,39 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   const [editing, setEditing] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [selectedWeek, setSelectedWeek] = useState('all')
+  // The activity a document is being attached to, from the timeline.
+  const [attachTo, setAttachTo] = useState(null)
+  const [attaching, setAttaching] = useState(false)
+  const { documents } = useSelector((state) => state.group)
+  const token = useSelector((state) => state.auth.token)
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
 
   const dayRange = buildDayRange(tripStartDate, tripEndDate)
 
-  useEffect(() => { dispatch(fetchActivities(tripId)) }, [dispatch, tripId])
+  useEffect(() => {
+    dispatch(fetchActivities(tripId))
+    // The timeline shows each activity's attached paper, so it needs the list
+    // even though the documents tab is where they are managed.
+    dispatch(fetchDocuments(tripId))
+  }, [dispatch, tripId])
+
+  // First document wins when an activity has several — the button opens one.
+  const docsByActivity = useMemo(() => {
+    const map = new Map()
+    for (const d of documents) {
+      if (d.activityId != null && hasFile(d) && !map.has(d.activityId)) map.set(d.activityId, d)
+    }
+    return map
+  }, [documents])
+
+  const handleAttach = async (doc) => {
+    setAttaching(true)
+    const result = doc.file
+      ? await dispatch(uploadDocument({ tripId, ...doc }))
+      : await dispatch(addDocument({ tripId, document: doc }))
+    setAttaching(false)
+    if (!result.error) setAttachTo(null)
+  }
 
   // On phones there is no room for a side panel, so the map takes over the
   // main column instead of sitting under the timeline.
@@ -582,41 +649,56 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div className="tl-title">{a.title}</div>
                                   <div className="tl-meta">
-                                    {a.location && (
-                                      <span className="tl-place">
-                                        {a.location}
-                                        {mapsUrl(a) && (
-                                          <a
-                                            className="tl-nav"
-                                            href={mapsUrl(a)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            title={`Deschide ${a.location} în hărți`}
-                                          >
-                                            <NavigationIcon size={13} strokeWidth={2.2} />
-                                          </a>
-                                        )}
-                                      </span>
-                                    )}
+                                    {a.location && <span className="tl-place">{a.location}</span>}
                                     {a.cost != null && (
                                       <span style={{ color: cat.color, fontWeight: 800 }}>{a.cost} {currency} / pers</span>
                                     )}
                                   </div>
                                 </div>
-                                {canEdit && (
-                                  <div className="tl-actions">
-                                    <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
-                                      <Pencil size={13} strokeWidth={2.2} />
-                                    </button>
-                                    <button
-                                      className="icon-btn-sm" title="Șterge"
-                                      disabled={deletingId === a.id}
-                                      onClick={() => handleDelete(a.id)}
+                                <div className="tl-actions">
+                                  {mapsUrl(a) && (
+                                    <a
+                                      className="icon-btn-sm"
+                                      href={mapsUrl(a)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title={`Deschide ${a.location} în hărți`}
                                     >
-                                      <Trash2 size={13} strokeWidth={2.2} />
+                                      <NavigationIcon size={13} strokeWidth={2.2} />
+                                    </a>
+                                  )}
+                                  {docsByActivity.get(a.id) ? (
+                                    <button
+                                      className="icon-btn-sm"
+                                      title={`Deschide „${docsByActivity.get(a.id).title}”`}
+                                      onClick={() => openDocument(tripId, docsByActivity.get(a.id), token)}
+                                    >
+                                      <FileText size={13} strokeWidth={2.2} />
                                     </button>
-                                  </div>
-                                )}
+                                  ) : (
+                                    <button
+                                      className="icon-btn-sm"
+                                      title="Atașează un document"
+                                      onClick={() => setAttachTo(a)}
+                                    >
+                                      <Paperclip size={13} strokeWidth={2.2} />
+                                    </button>
+                                  )}
+                                  {canEdit && (
+                                    <>
+                                      <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
+                                        <Pencil size={13} strokeWidth={2.2} />
+                                      </button>
+                                      <button
+                                        className="icon-btn-sm" title="Șterge"
+                                        disabled={deletingId === a.id}
+                                        onClick={() => handleDelete(a.id)}
+                                      >
+                                        <Trash2 size={13} strokeWidth={2.2} />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </li>
@@ -675,6 +757,11 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
         open={editing !== null} onClose={() => setEditing(null)} onSubmit={handleEdit}
         submitting={actionStatus === 'loading'} error={actionError}
         defaultDate={dayRange[0]} initial={editing}
+      />
+
+      <AddDocumentModal
+        open={attachTo !== null} onClose={() => setAttachTo(null)} onSubmit={handleAttach}
+        submitting={attaching} members={members} activity={attachTo}
       />
     </div>
   )
@@ -1846,13 +1933,34 @@ const DOC_KIND_UI = {
   other:    { emoji: '📄', label: 'Alt document' },
 }
 
-function AddDocumentModal({ open, onClose, onSubmit, submitting, members }) {
+/**
+ * Used both from the documents list and from an activity on the timeline. When
+ * `activity` is given the document is tied to it and the picker is hidden —
+ * there is only one answer, and offering it as a choice invites getting it wrong.
+ */
+function AddDocumentModal({ open, onClose, onSubmit, submitting, members, activities = [], activity = null, initial = null }) {
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState('flight')
   const [note, setNote] = useState('')
   const [fileUrl, setFileUrl] = useState('')
+  const [file, setFile] = useState(null)
   const [expiresAt, setExpiresAt] = useState('')
   const [ownerUserId, setOwnerUserId] = useState('')
+  const [activityId, setActivityId] = useState('')
+
+  // A fresh open starts blank, and an attach-to-activity open starts with that
+  // activity's name so the common case needs no typing.
+  useEffect(() => {
+    if (!open) return
+    setTitle(initial?.title ?? activity?.title ?? '')
+    setKind(initial?.kind ?? 'flight')
+    setNote(initial?.note ?? '')
+    setFileUrl(initial?.originalFileName ? '' : (initial?.fileUrl ?? ''))
+    setFile(null)
+    setExpiresAt(initial?.expiresAt ? initial.expiresAt.slice(0, 10) : '')
+    setOwnerUserId(initial?.ownerUserId ? String(initial.ownerUserId) : '')
+    setActivityId(initial?.activityId ? String(initial.activityId) : '')
+  }, [open, activity, initial])
 
   if (!open) return null
 
@@ -1864,8 +1972,10 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, members }) {
       kind,
       note: note.trim() || null,
       fileUrl: fileUrl.trim() || null,
+      file,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       ownerUserId: ownerUserId ? Number(ownerUserId) : null,
+      activityId: activity ? activity.id : (activityId ? Number(activityId) : null),
     })
   }
 
@@ -1873,7 +1983,11 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, members }) {
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box">
         <div className="modal-header">
-          <span className="modal-title">Adaugă un document</span>
+          <span className="modal-title">
+            {initial ? 'Editează documentul'
+              : activity ? `Document pentru „${activity.title}”`
+              : 'Adaugă un document'}
+          </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -1903,10 +2017,44 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, members }) {
               <input className="input-field" placeholder="ex. 12 sep, 07:20 · cod HX-8821" value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
 
+            {initial?.originalFileName ? (
+              <div style={{ font: "400 12px/1.4 Archivo, sans-serif", color: 'var(--text-faint)' }}>
+                Fișier atașat: {initial.originalFileName} · {formatFileSize(initial.sizeBytes)}
+              </div>
+            ) : (
             <div>
-              <label className="input-label">Link către fișier (opțional)</label>
-              <input className="input-field" type="url" placeholder="https://…" value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} />
+              <label className="input-label">Atașament (PDF, imagine, orice — max 10 MB)</label>
+              <input
+                className="input-field"
+                type="file"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.heic,.webp,.txt"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                style={{ padding: 8, cursor: 'pointer' }}
+              />
+              {file && (
+                <div style={{ marginTop: 6, font: "400 12px/1.3 Archivo, sans-serif", color: 'var(--text-faint)' }}>
+                  {file.name} · {formatFileSize(file.size)}
+                </div>
+              )}
             </div>
+            )}
+
+            {!file && !initial?.originalFileName && (
+              <div>
+                <label className="input-label">Sau un link către fișier (opțional)</label>
+                <input className="input-field" type="url" placeholder="https://…" value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} />
+              </div>
+            )}
+
+            {!activity && activities.length > 0 && (
+              <div>
+                <label className="input-label">Legat de o activitate (opțional)</label>
+                <select className="input-field" value={activityId} onChange={(e) => setActivityId(e.target.value)} style={{ cursor: 'pointer' }}>
+                  <option value="">Fără activitate</option>
+                  {activities.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+                </select>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
@@ -1945,12 +2093,18 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
   const [newTask, setNewTask] = useState('')
   // Phones show these three as an accordion, like the money tab.
   const [openSection, setOpenSection] = useState('members')
+  const [editingDoc, setEditingDoc] = useState(null)
+  const [docSubmitting, setDocSubmitting] = useState(false)
+  const token = useSelector((state) => state.auth.token)
+  const activities = useSelector((state) => state.activities.items)
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
 
   useEffect(() => {
     dispatch(fetchInvite(tripId))
     dispatch(fetchChecklist(tripId))
     dispatch(fetchDocuments(tripId))
+    // Needed for the "belongs to activity" picker in the document form.
+    dispatch(fetchActivities(tripId))
   }, [dispatch, tripId])
 
   const inviteExpiryDays = invite
@@ -2094,6 +2248,8 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
           const alert = doc.isExpiringSoon
           const sub = [
             doc.note,
+            doc.activityTitle ? `pentru ${doc.activityTitle}` : null,
+            doc.originalFileName ? `${doc.originalFileName} · ${formatFileSize(doc.sizeBytes)}` : null,
             doc.ownerUserName,
             doc.expiresAt ? `expiră ${new Date(doc.expiresAt).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' })}` : null,
           ].filter(Boolean).join(' · ')
@@ -2106,11 +2262,14 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
                 <div style={{ font: '800 13px/1 Archivo, sans-serif', color: alert ? 'var(--orange-500)' : 'var(--ink)', marginBottom: 3 }}>{doc.title}</div>
                 {sub && <div style={{ font: '400 11px/1.4 Archivo, sans-serif', color: alert ? 'var(--orange-700)' : 'var(--text-muted)' }}>{sub}</div>}
               </div>
-              {doc.fileUrl && (
-                <a className="icon-btn-sm" href={doc.fileUrl} target="_blank" rel="noopener noreferrer" title="Deschide" style={{ flexShrink: 0 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                </a>
+              {hasFile(doc) && (
+                <button className="icon-btn-sm" title="Deschide" style={{ flexShrink: 0 }} onClick={() => openDocument(tripId, doc, token)}>
+                  <FileText size={13} strokeWidth={2.2} />
+                </button>
               )}
+              <button className="icon-btn-sm" title="Editează" style={{ flexShrink: 0 }} onClick={() => setEditingDoc(doc)}>
+                <Pencil size={13} strokeWidth={2.2} />
+              </button>
               <button className="icon-btn-sm" title="Șterge" style={{ flexShrink: 0 }} onClick={() => dispatch(deleteDocument({ tripId, documentId: doc.id }))}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
               </button>
@@ -2181,9 +2340,25 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
 
       <AddDocumentModal
         open={docModalOpen} onClose={() => setDocModalOpen(false)} members={members}
+        activities={activities} submitting={docSubmitting}
         onSubmit={async (document) => {
-          const result = await dispatch(addDocument({ tripId, document }))
-          if (addDocument.fulfilled.match(result)) setDocModalOpen(false)
+          setDocSubmitting(true)
+          const result = document.file
+            ? await dispatch(uploadDocument({ tripId, ...document }))
+            : await dispatch(addDocument({ tripId, document }))
+          setDocSubmitting(false)
+          if (!result.error) setDocModalOpen(false)
+        }}
+      />
+
+      <AddDocumentModal
+        open={editingDoc !== null} onClose={() => setEditingDoc(null)} members={members}
+        activities={activities} initial={editingDoc} submitting={docSubmitting}
+        onSubmit={async (document) => {
+          setDocSubmitting(true)
+          const result = await dispatch(updateDocument({ tripId, documentId: editingDoc.id, document }))
+          setDocSubmitting(false)
+          if (!result.error) setEditingDoc(null)
         }}
       />
     </div>

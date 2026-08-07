@@ -1735,19 +1735,13 @@ input, textarea, select { font-family: inherit; }
 }
 .tl-content { padding-bottom: 10px; }
 
-/* Directions are for everyone, not an owner action, so this one does not hide
-   until hover the way edit and delete do. */
-.tl-nav {
-  opacity: 1;
-  color: var(--blue-700);
+/* Directions and the attached document sit in the same row as edit and delete,
+   so the anchors have to look like the buttons around them. */
+.tl-actions .icon-btn-sm {
+  width: 28px;
+  height: 28px;
+  text-decoration: none;
 }
-.tl-actions:has(.tl-nav) { opacity: 1; }
-.tl-actions:has(.tl-nav) > button {
-  opacity: 0;
-  transition: opacity 140ms;
-}
-.tl-card:hover .tl-actions > button,
-.tl-card:focus-within .tl-actions > button { opacity: 1; }
 
 @media (hover: none) {
   .tl-actions > button { opacity: 1 !important; }
