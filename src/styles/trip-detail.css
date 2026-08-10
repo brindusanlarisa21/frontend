@@ -1763,9 +1763,15 @@ select.input-field {
 .week-pill { min-width: 74px; }
 
 @media (max-width: 640px) {
-  .tl-item { grid-template-columns: 46px 30px minmax(0, 1fr); }
-  .tl-dot { width: 28px; height: 28px; }
-  .tl-content { padding-left: 10px; }
+  /* The time column shrank to 46px while its right padding held steady,
+     leaving less room for "09:00" than the text needs — it overflowed past
+     the left edge of the page instead of wrapping, reading as clipped. */
+  .tl-item { grid-template-columns: 52px 28px minmax(0, 1fr); }
+  .tl-opposite { padding: 10px 6px 0 0; }
+  .tl-time { font-size: 12px; }
+  .tl-duration { font-size: 10px; }
+  .tl-dot { width: 26px; height: 26px; }
+  .tl-content { padding-left: 8px; }
 }
 
 /* The timeline takes the height the viewport leaves under the header and the
