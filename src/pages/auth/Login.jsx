@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { login, clearAuthError } from '../../features/auth/authSlice'
+import { apiRequest } from '../../api/client'
 import '../../styles/ds/index.css'
 import '../../styles/trip-detail.css'
 
-function AuthLayout({ mode, onModeChange, children, error }) {
+// Matches the message AuthService throws for an unverified account — the one
+// case where the fix is "send it again", not "try again".
+const UNVERIFIED_MARKER = 'Confirmă-ți adresa de email'
+
+function AuthLayout({ mode, onModeChange, children, error, onResend, resendStatus }) {
   return (
     <div className="auth-layout">
       <div className="auth-panel-left">
@@ -50,6 +55,22 @@ function AuthLayout({ mode, onModeChange, children, error }) {
               <span>⚠</span> {error}
             </div>
           )}
+          {error?.includes(UNVERIFIED_MARKER) && (
+            resendStatus === 'sent' ? (
+              <div style={{ font: '400 13px/1.5 Archivo, sans-serif', color: 'var(--teal-700)', marginBottom: 14 }}>
+                Ți-am trimis un link nou — verifică inboxul (și spam-ul).
+              </div>
+            ) : (
+              <button
+                type="button" className="btn-secondary"
+                style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: 14 }}
+                disabled={resendStatus === 'sending'}
+                onClick={onResend}
+              >
+                {resendStatus === 'sending' ? 'Se trimite…' : 'Retrimite emailul de confirmare'}
+              </button>
+            )
+          )}
           {children}
         </div>
       </div>
@@ -64,6 +85,17 @@ function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [resendStatus, setResendStatus] = useState('idle') // idle | sending | sent
+
+  const handleResend = async () => {
+    setResendStatus('sending')
+    try {
+      await apiRequest('/auth/resend-verification', { method: 'POST', body: { email } })
+    } catch {
+      // Same outcome either way — see the endpoint's own comment.
+    }
+    setResendStatus('sent')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -77,7 +109,10 @@ function Login() {
   }
 
   return (
-    <AuthLayout mode="login" onModeChange={m => m === 'register' && navigate('/register')} error={error}>
+    <AuthLayout
+      mode="login" onModeChange={m => m === 'register' && navigate('/register')} error={error}
+      onResend={handleResend} resendStatus={resendStatus}
+    >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label className="input-label">Email</label>

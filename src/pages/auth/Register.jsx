@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { register, clearAuthError } from '../../features/auth/authSlice'
+import { apiRequest } from '../../api/client'
 import '../../styles/ds/index.css'
 import '../../styles/trip-detail.css'
 
@@ -13,6 +14,7 @@ function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [registered, setRegistered] = useState(false)
+  const [resendStatus, setResendStatus] = useState('idle') // idle | sending | sent
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -27,6 +29,17 @@ function Register() {
       return
     }
     setRegistered(true)
+  }
+
+  const handleResend = async () => {
+    setResendStatus('sending')
+    try {
+      await apiRequest('/auth/resend-verification', { method: 'POST', body: { email } })
+    } catch {
+      // Same message either way — the endpoint never reveals whether an
+      // address exists, so failure and success look identical here too.
+    }
+    setResendStatus('sent')
   }
 
   return (
@@ -68,9 +81,27 @@ function Register() {
                 Apasă-l ca să-ți activezi contul. Dacă nu apare în câteva minute,
                 caută și în spam.
               </div>
-              <Link to="/login" className="btn-secondary" style={{ display: 'inline-flex', justifyContent: 'center' }}>
-                Înapoi la autentificare
-              </Link>
+
+              {resendStatus === 'sent' ? (
+                <div style={{ font: '400 13px/1.5 Archivo, sans-serif', color: 'var(--teal-700)', marginBottom: 18 }}>
+                  Ți-am trimis un link nou — verifică din nou inboxul (și spam-ul).
+                </div>
+              ) : (
+                <button
+                  type="button" className="btn-secondary"
+                  style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: 12 }}
+                  disabled={resendStatus === 'sending'}
+                  onClick={handleResend}
+                >
+                  {resendStatus === 'sending' ? 'Se trimite…' : 'N-am primit emailul, retrimite'}
+                </button>
+              )}
+
+              <div>
+                <Link to="/login" className="btn-secondary" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+                  Înapoi la autentificare
+                </Link>
+              </div>
             </div>
           ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
