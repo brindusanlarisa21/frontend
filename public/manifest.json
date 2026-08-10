@@ -1,0 +1,12 @@
+{
+  "name": "TripSplit",
+  "short_name": "TripSplit",
+  "description": "Planificați călătoria împreună: itinerar, cheltuieli și chat.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1a30",
+  "theme_color": "#0b1a30",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

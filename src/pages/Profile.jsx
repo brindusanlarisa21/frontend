@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { useDispatch, useSelector } from 'react-redux'
 import { House, Wallet, FileText, Sparkles } from 'lucide-react'
 import { logout } from '../features/auth/authSlice'
+import {
+  isPushSupported, isStandaloneApp, isIos,
+  getCurrentSubscription, subscribeToPush, unsubscribeFromPush,
+} from '../push'
 import '../styles/ds/index.css'
 import '../styles/trip-detail.css'
 
@@ -54,14 +58,16 @@ function AppRail({ user }) {
   )
 }
 
-function Toggle({ checked, onChange }) {
+function Toggle({ checked, onChange, disabled = false }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       style={{
-        width: 46, height: 27, borderRadius: 999, border: 'none', cursor: 'pointer',
+        width: 46, height: 27, borderRadius: 999, border: 'none', cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
         background: checked ? '#1f6feb' : 'rgba(18,41,74,.18)',
         position: 'relative', flexShrink: 0, transition: 'background 200ms',
       }}
@@ -91,6 +97,9 @@ export default function Profile() {
   const [notifProposals, setNotifProposals] = useState(true)
   const [notifBudget, setNotifBudget] = useState(true)
   const [notifOffline, setNotifOffline] = useState(false)
+  const [pushState, setPushState] = useState('checking') // checking | unsupported | needs-install | off | on
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -124,6 +133,33 @@ export default function Profile() {
         setLoading(false)
       })
   }, [token])
+
+  useEffect(() => {
+    if (!isPushSupported()) { setPushState('unsupported'); return }
+    // iOS grants push only inside an installed home-screen app — a Safari
+    // tab can subscribe successfully and still never deliver anything.
+    if (isIos() && !isStandaloneApp()) { setPushState('needs-install'); return }
+    getCurrentSubscription()
+      .then((sub) => setPushState(sub ? 'on' : 'off'))
+      .catch(() => setPushState('off'))
+  }, [])
+
+  const handleTogglePush = async () => {
+    setPushBusy(true); setPushError('')
+    try {
+      if (pushState === 'on') {
+        await unsubscribeFromPush(token)
+        setPushState('off')
+      } else {
+        await subscribeToPush(token)
+        setPushState('on')
+      }
+    } catch (e) {
+      setPushError(e.message)
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true); setError(''); setSaved(false)
@@ -255,9 +291,51 @@ export default function Profile() {
                 </div>
               </div>
 
+              {/* ---- Notificări push ---- */}
+              <div>
+                <div className="kicker" style={{ marginBottom: 12 }}>Notificări push</div>
+
+                {pushState === 'unsupported' && (
+                  <div style={{ font: '400 13px/1.5 Archivo, sans-serif', color: 'var(--text-muted)' }}>
+                    Browserul acesta nu suportă notificări push.
+                  </div>
+                )}
+
+                {pushState === 'needs-install' && (
+                  <div style={{ font: '400 13px/1.5 Archivo, sans-serif', color: 'var(--text-muted)' }}>
+                    Pe iPhone, notificările merg doar dacă adaugi TripSplit pe ecranul principal:
+                    apasă <b>Distribuie</b> în Safari, apoi <b>„Adaugă pe ecranul principal"</b>,
+                    și deschide aplicația de acolo.
+                  </div>
+                )}
+
+                {(pushState === 'on' || pushState === 'off') && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0',
+                    borderBottom: '1px solid var(--border)',
+                  }}>
+                    <div>
+                      <div style={{ font: '800 14px/1 Archivo, sans-serif', color: 'var(--ink)', marginBottom: 4 }}>
+                        Mesaje, activități și documente noi
+                      </div>
+                      <div style={{ font: '400 12px/1 Archivo, sans-serif', color: 'var(--text-muted)' }}>
+                        Pe acest dispozitiv, chiar și cu aplicația închisă
+                      </div>
+                    </div>
+                    <Toggle checked={pushState === 'on'} onChange={handleTogglePush} disabled={pushBusy} />
+                  </div>
+                )}
+
+                {pushError && (
+                  <div style={{ font: '400 12px/1.4 Archivo, sans-serif', color: 'var(--orange-500)', marginTop: 8 }}>
+                    {pushError}
+                  </div>
+                )}
+              </div>
+
               {/* ---- Notificări ---- */}
               <div>
-                <div className="kicker" style={{ marginBottom: 12 }}>Notificări</div>
+                <div className="kicker" style={{ marginBottom: 12 }}>Alte preferințe</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {[
                     { label: 'Propuneri și voturi', sub: 'Când cineva propune o activitate', checked: notifProposals, set: setNotifProposals },
