@@ -731,6 +731,11 @@ input, textarea, select { font-family: inherit; }
 /* ============================================================
    INPUT (redesigned)
    ============================================================ */
+/* A native date/time/number input has an intrinsic minimum width on iOS
+   Safari that a `1fr` grid track does not shrink it below by default, so a
+   two-column row of them overflows into the column beside it. */
+.input-field { min-width: 0; box-sizing: border-box; }
+
 .input-field {
   width: 100%;
   padding: 10px 14px;

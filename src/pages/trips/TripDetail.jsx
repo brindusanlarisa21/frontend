@@ -274,7 +274,7 @@ function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate, initi
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
           <div>
             <label className="input-label">Data</label>
             <input className="input-field" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
@@ -285,7 +285,7 @@ function ActivityForm({ onClose, onSubmit, submitting, error, defaultDate, initi
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
           <div>
             <label className="input-label">Durată (minute)</label>
             <input className="input-field" type="number" min="0" step="15" placeholder="ex. 90" value={duration} onChange={(e) => setDuration(e.target.value)} />
@@ -860,7 +860,7 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial })
         </div>
 
         {/* Cine a plătit + Categorie */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
           <div>
             <label className="input-label">Cine a plătit</label>
             <div style={{ position: 'relative' }}>
@@ -1725,7 +1725,7 @@ function Chat({ tripId, currentUserId, members }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
             <div>
               <label className="input-label">Start</label>
               <input className="input-field" type="time" value={propForm.startTime} onChange={e => setProp('startTime', e.target.value)} />
@@ -2059,7 +2059,7 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, error, members,
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
               <div>
                 <label className="input-label">Expiră la (opțional)</label>
                 <input className="input-field" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
