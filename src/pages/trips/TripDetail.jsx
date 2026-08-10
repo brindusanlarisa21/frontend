@@ -852,7 +852,7 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial })
             <label className="input-label">Sumă</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input className="input-field" type="number" min="0.01" step="0.01" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} required style={{ flex: 1, minWidth: 0 }} />
-              <select className="input-field" value={currency} onChange={e => setCurrency(e.target.value)} style={{ width: 72, cursor: 'pointer', paddingLeft: 8, paddingRight: 4 }}>
+              <select className="input-field" value={currency} onChange={e => setCurrency(e.target.value)} style={{ width: 82, cursor: 'pointer', paddingLeft: 8 }}>
                 <option>EUR</option><option>RON</option><option>USD</option><option>GBP</option>
               </select>
             </div>
