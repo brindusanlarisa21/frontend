@@ -1795,12 +1795,64 @@ select.input-field {
 }
 .tl-content { padding-bottom: 10px; }
 
-/* Directions and the attached document sit in the same row as edit and delete,
-   so the anchors have to look like the buttons around them. */
+/* Directions sits inline as its own anchor; everything else lives behind the
+   "⋯" menu, so the anchor has to look like the button beside it. */
 .tl-actions .icon-btn-sm {
   width: 28px;
   height: 28px;
   text-decoration: none;
+}
+
+.activity-menu { position: relative; }
+
+.activity-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 190px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 50;
+}
+
+.activity-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--r-sm);
+  font: 700 12.5px/1 'Archivo', sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms;
+}
+.activity-menu-item:hover { background: var(--surface-sunken); }
+.activity-menu-item:disabled { opacity: .55; cursor: default; }
+.activity-menu-item.activity-menu-danger { color: #c0392b; }
+
+.activity-menu-count {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--blue-tint);
+  color: var(--blue-700);
+  font: 800 10.5px/18px 'Archivo', sans-serif;
+  text-align: center;
+}
+
+.activity-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
 }
 
 

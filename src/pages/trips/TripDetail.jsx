@@ -5,7 +5,7 @@ import {
   Landmark, UtensilsCrossed, BedDouble, Plane, Ticket, Bus, Pencil, Trash2,
   // Aliased: `Navigation` is also a DOM global, and the bare name resolves to
   // the browser interface, which throws when React calls it as a component.
-  Navigation as NavigationIcon, Paperclip, FileText,
+  Navigation as NavigationIcon, Paperclip, FileText, MoreHorizontal,
 } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
@@ -429,6 +429,8 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   const [attachTo, setAttachTo] = useState(null)
   const [attaching, setAttaching] = useState(false)
   const [attachError, setAttachError] = useState(null)
+  // The activity whose document list popover is open, from the "⋯" menu.
+  const [docsFor, setDocsFor] = useState(null)
   const { documents } = useSelector((state) => state.group)
   const token = useSelector((state) => state.auth.token)
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
@@ -442,11 +444,15 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
     dispatch(fetchDocuments(tripId))
   }, [dispatch, tripId])
 
-  // First document wins when an activity has several — the button opens one.
+  // Every document belonging to an activity, not just one — an activity can
+  // carry a boarding pass, a hotel voucher and a ticket at once.
   const docsByActivity = useMemo(() => {
     const map = new Map()
     for (const d of documents) {
-      if (d.activityId != null && hasFile(d) && !map.has(d.activityId)) map.set(d.activityId, d)
+      if (d.activityId == null) continue
+      const list = map.get(d.activityId) ?? []
+      list.push(d)
+      map.set(d.activityId, list)
     }
     return map
   }, [documents])
@@ -670,37 +676,16 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
                                       <NavigationIcon size={13} strokeWidth={2.2} />
                                     </a>
                                   )}
-                                  {docsByActivity.get(a.id) ? (
-                                    <button
-                                      className="icon-btn-sm"
-                                      title={`Deschide „${docsByActivity.get(a.id).title}”`}
-                                      onClick={() => openDocument(tripId, docsByActivity.get(a.id), token)}
-                                    >
-                                      <FileText size={13} strokeWidth={2.2} />
-                                    </button>
-                                  ) : (
-                                    <button
-                                      className="icon-btn-sm"
-                                      title="Atașează un document"
-                                      onClick={() => setAttachTo(a)}
-                                    >
-                                      <Paperclip size={13} strokeWidth={2.2} />
-                                    </button>
-                                  )}
-                                  {canEdit && (
-                                    <>
-                                      <button className="icon-btn-sm" title="Editează" onClick={() => setEditing(a)}>
-                                        <Pencil size={13} strokeWidth={2.2} />
-                                      </button>
-                                      <button
-                                        className="icon-btn-sm" title="Șterge"
-                                        disabled={deletingId === a.id}
-                                        onClick={() => handleDelete(a.id)}
-                                      >
-                                        <Trash2 size={13} strokeWidth={2.2} />
-                                      </button>
-                                    </>
-                                  )}
+                                  <ActivityMenu
+                                    activity={a}
+                                    docs={docsByActivity.get(a.id) ?? []}
+                                    canEdit={canEdit}
+                                    deleting={deletingId === a.id}
+                                    onEdit={() => setEditing(a)}
+                                    onDelete={() => handleDelete(a.id)}
+                                    onAddDocument={() => setAttachTo(a)}
+                                    onViewDocuments={() => setDocsFor(a)}
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -766,6 +751,112 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
         open={attachTo !== null} onClose={() => { setAttachTo(null); setAttachError(null) }} onSubmit={handleAttach}
         submitting={attaching} error={attachError} members={members} activity={attachTo}
       />
+
+      <ActivityDocsModal
+        activity={docsFor}
+        docs={docsFor ? (docsByActivity.get(docsFor.id) ?? []) : []}
+        tripId={tripId} token={token}
+        onClose={() => setDocsFor(null)}
+        onAddAnother={() => { setAttachTo(docsFor); setDocsFor(null) }}
+      />
+    </div>
+  )
+}
+
+/**
+ * The "⋯" menu on a timeline row. Directions stay a bare icon beside it —
+ * everyone can use them, so they are not worth a click to reveal — while
+ * document and edit actions, which apply to fewer people or need a confirm,
+ * live behind the menu instead of crowding the row with buttons.
+ */
+function ActivityMenu({ activity, docs, canEdit, deleting, onEdit, onDelete, onAddDocument, onViewDocuments }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const withClose = (fn) => () => { setOpen(false); fn() }
+
+  return (
+    <div className="activity-menu" ref={ref}>
+      <button className="icon-btn-sm" title="Mai multe" onClick={() => setOpen((v) => !v)}>
+        <MoreHorizontal size={15} strokeWidth={2.2} />
+      </button>
+      {open && (
+        <div className="activity-menu-dropdown" role="menu">
+          <button className="activity-menu-item" onClick={withClose(onViewDocuments)}>
+            <FileText size={14} strokeWidth={2.2} />
+            Documente{docs.length > 0 && <span className="activity-menu-count">{docs.length}</span>}
+          </button>
+          <button className="activity-menu-item" onClick={withClose(onAddDocument)}>
+            <Paperclip size={14} strokeWidth={2.2} />
+            Adaugă document
+          </button>
+          {canEdit && (
+            <>
+              <div className="activity-menu-sep" />
+              <button className="activity-menu-item" onClick={withClose(onEdit)}>
+                <Pencil size={14} strokeWidth={2.2} />
+                Editează
+              </button>
+              <button className="activity-menu-item activity-menu-danger" disabled={deleting} onClick={withClose(onDelete)}>
+                <Trash2 size={14} strokeWidth={2.2} />
+                {deleting ? 'Se șterge…' : 'Șterge'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** All documents attached to one activity, opened from the timeline's "⋯" menu. */
+function ActivityDocsModal({ activity, docs, tripId, token, onClose, onAddAnother }) {
+  const dispatch = useDispatch()
+  if (!activity) return null
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box">
+        <div className="modal-header">
+          <span className="modal-title">Documente · {activity.title}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {docs.length === 0 && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Niciun document atașat încă.</div>
+          )}
+          {docs.map((doc) => {
+            const ui = DOC_KIND_UI[doc.kind] || DOC_KIND_UI.other
+            return (
+              <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--r-lg)', background: 'var(--surface-solid)', border: '1px solid var(--border)' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--blue-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>
+                  {ui.emoji}
+                </div>
+                <div style={{ flex: 1, minWidth: 0, font: '800 13px/1.3 Archivo, sans-serif', color: 'var(--ink)' }}>{doc.title}</div>
+                {hasFile(doc) && (
+                  <button className="icon-btn-sm" title="Deschide" style={{ flexShrink: 0 }} onClick={() => openDocument(tripId, doc, token)}>
+                    <FileText size={13} strokeWidth={2.2} />
+                  </button>
+                )}
+                <button className="icon-btn-sm" title="Șterge" style={{ flexShrink: 0 }} onClick={() => dispatch(deleteDocument({ tripId, documentId: doc.id }))}>
+                  <Trash2 size={13} strokeWidth={2.2} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={onClose}>Închide</button>
+          <button type="button" className="btn-primary" onClick={onAddAnother}>Adaugă un document</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1941,7 +2032,7 @@ const DOC_KIND_UI = {
  * `activity` is given the document is tied to it and the picker is hidden —
  * there is only one answer, and offering it as a choice invites getting it wrong.
  */
-function AddDocumentModal({ open, onClose, onSubmit, submitting, error, members, activities = [], activity = null, initial = null }) {
+function AddDocumentModal({ open, onClose, onSubmit, submitting, error, members, activities = [], activity = null, initial = null, onAddAnother = null, presetActivityId = null }) {
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState('flight')
   const [note, setNote] = useState('')
@@ -1962,8 +2053,8 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, error, members,
     setFile(null)
     setExpiresAt(initial?.expiresAt ? initial.expiresAt.slice(0, 10) : '')
     setOwnerUserId(initial?.ownerUserId ? String(initial.ownerUserId) : '')
-    setActivityId(initial?.activityId ? String(initial.activityId) : '')
-  }, [open, activity, initial])
+    setActivityId(initial?.activityId ? String(initial.activityId) : (presetActivityId ? String(presetActivityId) : ''))
+  }, [open, activity, initial, presetActivityId])
 
   if (!open) return null
 
@@ -2074,6 +2165,11 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, error, members,
             </div>
           </div>
           <div className="modal-actions">
+            {initial?.activityId != null && onAddAnother && (
+              <button type="button" className="btn-secondary" style={{ marginRight: 'auto' }} onClick={onAddAnother}>
+                + Alt document pentru aceeași activitate
+              </button>
+            )}
             {error && <div className="auth-error" style={{ flex: 1, margin: 0 }}>{error}</div>}
             <button type="button" className="btn-secondary" onClick={onClose}>Renunț</button>
             <button type="submit" className="btn-primary" disabled={submitting}>
@@ -2098,6 +2194,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
   // Phones show these three as an accordion, like the money tab.
   const [openSection, setOpenSection] = useState('members')
   const [editingDoc, setEditingDoc] = useState(null)
+  const [presetActivityId, setPresetActivityId] = useState(null)
   const [docSubmitting, setDocSubmitting] = useState(false)
   const [docError, setDocError] = useState(null)
   const token = useSelector((state) => state.auth.token)
@@ -2344,8 +2441,8 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
       />
 
       <AddDocumentModal
-        open={docModalOpen} onClose={() => { setDocModalOpen(false); setDocError(null) }} members={members}
-        activities={activities} submitting={docSubmitting} error={docError}
+        open={docModalOpen} onClose={() => { setDocModalOpen(false); setDocError(null); setPresetActivityId(null) }} members={members}
+        activities={activities} submitting={docSubmitting} error={docError} presetActivityId={presetActivityId}
         onSubmit={async (document) => {
           setDocSubmitting(true)
           setDocError(null)
@@ -2361,6 +2458,12 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
       <AddDocumentModal
         open={editingDoc !== null} onClose={() => { setEditingDoc(null); setDocError(null) }} members={members}
         activities={activities} initial={editingDoc} submitting={docSubmitting} error={docError}
+        onAddAnother={() => {
+          setPresetActivityId(editingDoc.activityId)
+          setEditingDoc(null)
+          setDocError(null)
+          setDocModalOpen(true)
+        }}
         onSubmit={async (document) => {
           setDocSubmitting(true)
           setDocError(null)
