@@ -1721,20 +1721,14 @@ input, textarea, select { font-family: inherit; }
   color: var(--text-muted);
 }
 
-/* Actions stay out of the way until the row is touched or focused. */
+/* Directions, the document, edit and delete: always visible, not just on
+   hover — a hover-to-reveal timeline reads as "the buttons are missing"
+   on a device with no mouse anywhere near the row, and hid them outright
+   on desktop until the pointer landed exactly right. */
 .tl-actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 140ms;
-}
-.tl-card:hover .tl-actions,
-.tl-card:focus-within .tl-actions { opacity: 1; }
-
-/* Pointer-less devices never hover, so the actions must always show. */
-@media (hover: none) {
-  .tl-actions { opacity: 1; }
 }
 
 /* Week pills are wider than day pills and hold a label plus a count. */
@@ -1781,9 +1775,6 @@ input, textarea, select { font-family: inherit; }
   text-decoration: none;
 }
 
-@media (hover: none) {
-  .tl-actions > button { opacity: 1 !important; }
-}
 
 /* Directions sit inline with the place name as a bare glyph — not a button. */
 .tl-place {
