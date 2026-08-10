@@ -428,6 +428,7 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
   // The activity a document is being attached to, from the timeline.
   const [attachTo, setAttachTo] = useState(null)
   const [attaching, setAttaching] = useState(false)
+  const [attachError, setAttachError] = useState(null)
   const { documents } = useSelector((state) => state.group)
   const token = useSelector((state) => state.auth.token)
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
@@ -452,11 +453,13 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
 
   const handleAttach = async (doc) => {
     setAttaching(true)
+    setAttachError(null)
     const result = doc.file
       ? await dispatch(uploadDocument({ tripId, ...doc }))
-      : await dispatch(addDocument({ tripId, document: doc }))
+      : await dispatch(addDocument({ tripId, document: { ...doc, file: undefined } }))
     setAttaching(false)
-    if (!result.error) setAttachTo(null)
+    if (result.meta.requestStatus === 'fulfilled') setAttachTo(null)
+    else setAttachError(result.payload ?? 'Documentul nu a putut fi salvat.')
   }
 
   // On phones there is no room for a side panel, so the map takes over the
@@ -760,8 +763,8 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
       />
 
       <AddDocumentModal
-        open={attachTo !== null} onClose={() => setAttachTo(null)} onSubmit={handleAttach}
-        submitting={attaching} members={members} activity={attachTo}
+        open={attachTo !== null} onClose={() => { setAttachTo(null); setAttachError(null) }} onSubmit={handleAttach}
+        submitting={attaching} error={attachError} members={members} activity={attachTo}
       />
     </div>
   )
@@ -1938,7 +1941,7 @@ const DOC_KIND_UI = {
  * `activity` is given the document is tied to it and the picker is hidden —
  * there is only one answer, and offering it as a choice invites getting it wrong.
  */
-function AddDocumentModal({ open, onClose, onSubmit, submitting, members, activities = [], activity = null, initial = null }) {
+function AddDocumentModal({ open, onClose, onSubmit, submitting, error, members, activities = [], activity = null, initial = null }) {
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState('flight')
   const [note, setNote] = useState('')
@@ -1981,7 +1984,7 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, members, activi
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
+      <div className="modal-box modal-box-tall">
         <div className="modal-header">
           <span className="modal-title">
             {initial ? 'Editează documentul'
@@ -1990,8 +1993,8 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, members, activi
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="modal-form-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label className="input-label">Titlu</label>
               <input className="input-field" placeholder="ex. Zbor OTP → LIS" value={title} onChange={(e) => setTitle(e.target.value)} required />
@@ -2070,7 +2073,8 @@ function AddDocumentModal({ open, onClose, onSubmit, submitting, members, activi
               </div>
             </div>
           </div>
-          <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <div className="modal-actions">
+            {error && <div className="auth-error" style={{ flex: 1, margin: 0 }}>{error}</div>}
             <button type="button" className="btn-secondary" onClick={onClose}>Renunț</button>
             <button type="submit" className="btn-primary" disabled={submitting}>
               {submitting ? 'Se salvează…' : 'Salvează'}
@@ -2095,6 +2099,7 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
   const [openSection, setOpenSection] = useState('members')
   const [editingDoc, setEditingDoc] = useState(null)
   const [docSubmitting, setDocSubmitting] = useState(false)
+  const [docError, setDocError] = useState(null)
   const token = useSelector((state) => state.auth.token)
   const activities = useSelector((state) => state.activities.items)
   const currentUserId = members.find((m) => m.email === currentUserEmail)?.userId
@@ -2339,26 +2344,32 @@ function Members({ members, currentUserEmail, isAdmin, tripId }) {
       />
 
       <AddDocumentModal
-        open={docModalOpen} onClose={() => setDocModalOpen(false)} members={members}
-        activities={activities} submitting={docSubmitting}
+        open={docModalOpen} onClose={() => { setDocModalOpen(false); setDocError(null) }} members={members}
+        activities={activities} submitting={docSubmitting} error={docError}
         onSubmit={async (document) => {
           setDocSubmitting(true)
+          setDocError(null)
           const result = document.file
             ? await dispatch(uploadDocument({ tripId, ...document }))
-            : await dispatch(addDocument({ tripId, document }))
+            : await dispatch(addDocument({ tripId, document: { ...document, file: undefined } }))
           setDocSubmitting(false)
-          if (!result.error) setDocModalOpen(false)
+          if (result.meta.requestStatus === 'fulfilled') setDocModalOpen(false)
+          else setDocError(result.payload ?? 'Documentul nu a putut fi salvat.')
         }}
       />
 
       <AddDocumentModal
-        open={editingDoc !== null} onClose={() => setEditingDoc(null)} members={members}
-        activities={activities} initial={editingDoc} submitting={docSubmitting}
+        open={editingDoc !== null} onClose={() => { setEditingDoc(null); setDocError(null) }} members={members}
+        activities={activities} initial={editingDoc} submitting={docSubmitting} error={docError}
         onSubmit={async (document) => {
           setDocSubmitting(true)
-          const result = await dispatch(updateDocument({ tripId, documentId: editingDoc.id, document }))
+          setDocError(null)
+          const result = await dispatch(updateDocument({
+            tripId, documentId: editingDoc.id, document: { ...document, file: undefined },
+          }))
           setDocSubmitting(false)
-          if (!result.error) setEditingDoc(null)
+          if (result.meta.requestStatus === 'fulfilled') setEditingDoc(null)
+          else setDocError(result.payload ?? 'Documentul nu a putut fi salvat.')
         }}
       />
     </div>

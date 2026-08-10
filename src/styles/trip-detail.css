@@ -781,10 +781,45 @@ input, textarea, select { font-family: inherit; }
   border-bottom: 1px solid var(--border);
 }
 .modal-title {
-  font: 800 18px/1 'Archivo', sans-serif;
+  /* Titles that quote an activity name can be long; they wrap rather than
+     running under the close button. */
+  flex: 1;
+  min-width: 0;
+  font: 800 18px/1.25 'Archivo', sans-serif;
   letter-spacing: -0.02em;
   color: var(--ink);
 }
+/* A form long enough to scroll must scroll inside itself — otherwise the
+   footer scrolls away and its buttons end up over the fields. */
+.modal-box-tall {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-box-tall .modal-header { flex-shrink: 0; }
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.modal-form-body {
+  padding: 18px 22px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+.modal-actions {
+  flex-shrink: 0;
+  padding: 14px 22px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--surface-solid);
+}
+
 .modal-body { padding: 20px 22px; }
 .modal-footer {
   padding: 14px 22px;
@@ -1217,6 +1252,9 @@ input, textarea, select { font-family: inherit; }
     border-radius: 20px 20px 0 0;
     animation: sheet-up 200ms ease-out;
   }
+  /* Restated after .modal-box: a form that scrolls inside itself must keep its
+     own scroll container as a sheet too, or the buttons scroll over the fields. */
+  .modal-box-tall { overflow: hidden; }
   /* The grab handle that marks a sheet as draggable-looking. */
   .modal-box::before {
     content: '';
