@@ -904,6 +904,7 @@ function MemberAvatar({ name, size = 32 }) {
 function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial, currency = 'EUR' }) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
+  const [expCurrency, setExpCurrency] = useState(initial?.currency ?? currency)
   const [category, setCategory] = useState(initial?.category ?? 'food')
   const [paidByUserId, setPaidByUserId] = useState(
     initial?.paidByUserId != null ? String(initial.paidByUserId) : String(members[0]?.userId ?? '')
@@ -928,7 +929,7 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial, c
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!title.trim() || !amount || !paidByUserId) return
-    onSubmit({ title: title.trim(), amount: parseFloat(amount), category, paidByUserId: parseInt(paidByUserId, 10), splitAmong: [...splitAmong].map(Number) })
+    onSubmit({ title: title.trim(), amount: parseFloat(amount), currency: expCurrency, category, paidByUserId: parseInt(paidByUserId, 10), splitAmong: [...splitAmong].map(Number) })
   }
 
   const catKeys = Object.keys(EXPENSE_CAT_UI)
@@ -946,16 +947,12 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial, c
             <label className="input-label">Sumă</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input className="input-field" type="number" min="0.01" step="0.01" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} required style={{ flex: 1, minWidth: 0 }} />
-              {/* Every expense in a trip shares the trip's own currency — there is
-                  no conversion anywhere balances are summed, so offering a picker
-                  here would silently lie about what actually gets stored. */}
-              <div
-                className="input-field"
-                style={{ width: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontWeight: 800 }}
-                title="Valuta călătoriei — se schimbă din setările călătoriei"
-              >
-                {currency}
-              </div>
+              {/* Each expense keeps its own currency — the trip's currency is only
+                  the default a new one starts with. Balances net per currency,
+                  never converting, so this choice sticks with the expense. */}
+              <select className="input-field" value={expCurrency} onChange={e => setExpCurrency(e.target.value)} style={{ width: 82, cursor: 'pointer', paddingLeft: 8 }}>
+                <option>EUR</option><option>RON</option><option>USD</option><option>GBP</option>
+              </select>
             </div>
           </div>
         </div>
@@ -1258,7 +1255,7 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
 
   const settleDebtOf = async (debt, close) => {
     if (!debt) return
-    const result = await dispatch(createSettlement({ tripId, fromUserId: debt.fromUserId, toUserId: debt.toUserId, amount: debt.amount, method: 'Cash' }))
+    const result = await dispatch(createSettlement({ tripId, fromUserId: debt.fromUserId, toUserId: debt.toUserId, amount: debt.amount, method: 'Cash', currency: debt.currency ?? currency }))
     if (createSettlement.fulfilled.match(result)) {
       close(); setActiveSettle(null)
       dispatch(fetchExpenses(tripId)); dispatch(fetchBalances(tripId))
@@ -1269,8 +1266,15 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
   const handleConfirmReceived = () => settleDebtOf(requestModal, () => setRequestModal(null))
 
   const debts = balances?.debts ?? []
-  const net = balances?.net ?? 0
-  const totalSpent = items.reduce((s, e) => s + (e.amount || 0), 0)
+  // Sorted by the backend so the currency with the biggest open balance
+  // leads — usually the only one that matters, on a single-currency trip.
+  const byCurrency = balances?.byCurrency ?? []
+  const primaryBalance = byCurrency[0] ?? { currency, net: 0, youOwe: 0, youAreOwed: 0 }
+  const totalsByCurrency = items.reduce((acc, e) => {
+    const c = e.currency || currency
+    acc[c] = (acc[c] || 0) + (e.amount || 0)
+    return acc
+  }, {})
 
   const filteredItems = items.filter(exp => {
     if (filter !== 'mine') return true
@@ -1284,7 +1288,10 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
   const editInitial = modal?.mode === 'edit' ? {
     id: modal.expense.id, title: modal.expense.title, amount: modal.expense.amount,
     category: modal.expense.category, paidByUserId: modal.expense.paidByUserId,
-    splitAmong: members.map(m => m.userId),
+    currency: modal.expense.currency ?? currency,
+    // Falls back to everyone only if an older cached expense has no split
+    // list yet — a real one always comes back from the server now.
+    splitAmong: modal.expense.splitAmong ?? members.map(m => m.userId),
   } : null
 
   return (
@@ -1292,24 +1299,47 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
       {/* ---- Main column ---- */}
       <div className="split-main tall-main money-main" style={{ padding: '22px 28px' }}>
 
-        {/* Sold — the number that matters most, so it leads the page */}
+        {/* Sold — the number that matters most, so it leads the page. Nothing
+            converts between currencies, so a trip with more than one shows a
+            balance per currency instead of one number that would quietly mix
+            them. */}
         <div className="balance-hero-card" style={{ marginBottom: 18 }}>
-          <div className="balance-hero-kicker">Soldul tău</div>
-          <div className="balance-hero-amount" style={{ color: net >= 0 ? '#fff' : '#fca5a5' }}>
-            {net >= 0 ? '+' : ''}{Number(net).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {currency}
+          <div className="balance-hero-kicker">Soldul tău{byCurrency.length > 1 ? ` · ${primaryBalance.currency}` : ''}</div>
+          <div className="balance-hero-amount" style={{ color: primaryBalance.net >= 0 ? '#fff' : '#fca5a5' }}>
+            {primaryBalance.net >= 0 ? '+' : ''}{Number(primaryBalance.net).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {primaryBalance.currency}
           </div>
           <div className="balance-hero-sub">
-            {net > 0 ? `Ai de primit de la ${debts.filter(d => d.toUserId === currentUserId).length} prieteni`
-              : net < 0 ? 'Datorezi bani'
+            {primaryBalance.net > 0 ? `Ai de primit de la ${debts.filter(d => d.toUserId === currentUserId && d.currency === primaryBalance.currency).length} prieteni`
+              : primaryBalance.net < 0 ? 'Datorezi bani'
               : 'Ești la egal'}
           </div>
+          {byCurrency.length > 1 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,.14)' }}>
+              {byCurrency.slice(1).map(b => (
+                <div key={b.currency} style={{ display: 'flex', justifyContent: 'space-between', font: '700 13px/1 Archivo, sans-serif', color: 'rgba(255,255,255,.75)' }}>
+                  <span>{b.currency}</span>
+                  <span style={{ color: b.net >= 0 ? '#fff' : '#fca5a5' }}>
+                    {b.net >= 0 ? '+' : ''}{Number(b.net).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {b.currency}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Total */}
         <div style={{ background: 'var(--surface-solid)', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', padding: '14px 16px', boxShadow: 'var(--shadow-card)', marginBottom: 24 }}>
           <div className="kicker" style={{ marginBottom: 6 }}>Total cheltuit</div>
-          <div style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>
-            {totalSpent.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {Object.entries(totalsByCurrency).length === 0 ? (
+              <div style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>
+                0,00 {currency}
+              </div>
+            ) : Object.entries(totalsByCurrency).map(([c, sum]) => (
+              <div key={c} style={{ font: '800 22px/1 Archivo, sans-serif', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>
+                {sum.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {c}
+              </div>
+            ))}
           </div>
         </div>
 
