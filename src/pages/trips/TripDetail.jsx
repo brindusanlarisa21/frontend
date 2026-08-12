@@ -877,13 +877,17 @@ const selectStyle = {
   color: 'var(--text-strong)', outline: 'none', cursor: 'pointer',
 }
 
+// Keys match TripSplit.Common.Enums.ExpenseCategory exactly (lowercased) — the
+// server does Enum.TryParse on this string and rejects anything that isn't
+// one of its six names, so a UI label that doesn't map to one silently fails
+// every expense filed under it.
 const EXPENSE_CAT_UI = {
-  food:      { label: 'Mâncare',   emoji: '🍽', bg: 'rgba(255,122,69,.12)', color: 'var(--orange-500)' },
-  transport: { label: 'Transport', emoji: '🚗', bg: 'rgba(31,111,235,.10)', color: 'var(--blue-500)' },
-  stay:      { label: 'Cazare',    emoji: '🛏', bg: 'rgba(15,155,142,.10)', color: 'var(--teal-500)' },
-  sight:     { label: 'Atracții',  emoji: '🏛', bg: 'rgba(31,111,235,.10)', color: 'var(--blue-500)' },
-  fun:       { label: 'Distracție',emoji: '🎟', bg: 'rgba(124,58,237,.10)', color: '#7c3aed' },
-  other:     { label: 'Altele',    emoji: '📦', bg: 'rgba(156,163,175,.12)', color: '#6b7280' },
+  food:    { label: 'Mâncare',      emoji: '🍽', bg: 'rgba(255,122,69,.12)', color: 'var(--orange-500)' },
+  stay:    { label: 'Cazare',       emoji: '🛏', bg: 'rgba(15,155,142,.10)', color: 'var(--teal-500)' },
+  travel:  { label: 'Călătorie',    emoji: '✈',  bg: 'rgba(31,111,235,.10)', color: 'var(--blue-500)' },
+  transit: { label: 'Transport local', emoji: '🚗', bg: 'rgba(31,111,235,.10)', color: 'var(--blue-500)' },
+  fun:     { label: 'Distracție',   emoji: '🎟', bg: 'rgba(124,58,237,.10)', color: '#7c3aed' },
+  shop:    { label: 'Cumpărături',  emoji: '🛍', bg: 'rgba(156,163,175,.12)', color: '#6b7280' },
 }
 
 function MemberAvatar({ name, size = 32 }) {
@@ -897,10 +901,9 @@ function MemberAvatar({ name, size = 32 }) {
   )
 }
 
-function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial }) {
+function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial, currency = 'EUR' }) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
-  const [currency, setCurrency] = useState('EUR')
   const [category, setCategory] = useState(initial?.category ?? 'food')
   const [paidByUserId, setPaidByUserId] = useState(
     initial?.paidByUserId != null ? String(initial.paidByUserId) : String(members[0]?.userId ?? '')
@@ -943,9 +946,16 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial })
             <label className="input-label">Sumă</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input className="input-field" type="number" min="0.01" step="0.01" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} required style={{ flex: 1, minWidth: 0 }} />
-              <select className="input-field" value={currency} onChange={e => setCurrency(e.target.value)} style={{ width: 82, cursor: 'pointer', paddingLeft: 8 }}>
-                <option>EUR</option><option>RON</option><option>USD</option><option>GBP</option>
-              </select>
+              {/* Every expense in a trip shares the trip's own currency — there is
+                  no conversion anywhere balances are summed, so offering a picker
+                  here would silently lie about what actually gets stored. */}
+              <div
+                className="input-field"
+                style={{ width: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontWeight: 800 }}
+                title="Valuta călătoriei — se schimbă din setările călătoriei"
+              >
+                {currency}
+              </div>
             </div>
           </div>
         </div>
@@ -1020,7 +1030,7 @@ function ExpenseForm({ onClose, onSubmit, submitting, error, members, initial })
   )
 }
 
-function ExpenseModal({ open, onClose, onSubmit, submitting, error, members, initial }) {
+function ExpenseModal({ open, onClose, onSubmit, submitting, error, members, initial, currency = 'EUR' }) {
   if (!open) return null
   const isEdit = Boolean(initial?.id)
   return (
@@ -1030,7 +1040,7 @@ function ExpenseModal({ open, onClose, onSubmit, submitting, error, members, ini
           <span className="modal-title">{isEdit ? 'Editează cheltuiala' : 'Adaugă o cheltuială'}</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1 }}>×</button>
         </div>
-        <ExpenseForm key={open ? (initial?.id ?? 'new') : 'closed'} onClose={onClose} onSubmit={onSubmit} submitting={submitting} error={error} members={members} initial={initial} />
+        <ExpenseForm key={open ? (initial?.id ?? 'new') : 'closed'} onClose={onClose} onSubmit={onSubmit} submitting={submitting} error={error} members={members} initial={initial} currency={currency} />
       </div>
     </div>
   )
@@ -1427,7 +1437,7 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
         </div>
       </div>
 
-      <ExpenseModal open={modal !== null} onClose={() => setModal(null)} onSubmit={modal?.mode === 'edit' ? handleEdit : handleAdd} submitting={actionStatus === 'loading'} error={actionError} members={members} initial={editInitial} />
+      <ExpenseModal open={modal !== null} onClose={() => setModal(null)} onSubmit={modal?.mode === 'edit' ? handleEdit : handleAdd} submitting={actionStatus === 'loading'} error={actionError} members={members} initial={editInitial} currency={currency} />
       <SettleModal open={settleModal !== null} debt={settleModal} submitting={actionStatus === 'loading'} onClose={() => setSettleModal(null)} onSettle={handleSettle} />
       <RequestModal open={requestModal !== null} debt={requestModal} submitting={actionStatus === 'loading'} onClose={() => setRequestModal(null)} onConfirmReceived={handleConfirmReceived} />
     </div>
@@ -3080,8 +3090,8 @@ function Recap({ trip, expenses, activities }) {
     catTotals[k] = (catTotals[k] || 0) + (e.amount || 0)
   })
 
-  const CAT_LABELS = { food: 'Mâncare', stay: 'Cazare', transport: 'Transport', sight: 'Obiective', fun: 'Distracție', other: 'Altele' }
-  const CAT_COLORS = { food: '#ff7a45', stay: '#0f9b8e', transport: '#1f6feb', sight: '#1f6feb', fun: '#7c3aed', other: '#9ca3af' }
+  const CAT_LABELS = { food: 'Mâncare', stay: 'Cazare', travel: 'Călătorie', transit: 'Transport local', fun: 'Distracție', shop: 'Cumpărături' }
+  const CAT_COLORS = { food: '#ff7a45', stay: '#0f9b8e', travel: '#1f6feb', transit: '#1f6feb', fun: '#7c3aed', shop: '#9ca3af' }
 
   return (
     <div style={{ padding: '0 0 60px' }}>
