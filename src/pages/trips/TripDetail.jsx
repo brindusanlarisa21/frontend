@@ -560,7 +560,7 @@ function Itinerary({ tripId, tripStartDate, tripEndDate, members, currentUserEma
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {visibleItems.length > 0 && (
-                <span className="day-heading-meta">{visibleItems.length} PLANURI{totalCost > 0 ? ` · ${totalCost} € EST.` : ''}</span>
+                <span className="day-heading-meta">{visibleItems.length} PLANURI{totalCost > 0 ? ` · ${totalCost} ${currency} EST.` : ''}</span>
               )}
               <button
                 className="btn-secondary mobile-only"
@@ -1379,11 +1379,11 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ font: '800 14px/1 Archivo, sans-serif', color: 'var(--ink)', marginBottom: 3 }}>{exp.title}</div>
                 <div style={{ font: '400 12px/1 Archivo, sans-serif', color: 'var(--text-muted)' }}>
-                  {exp.paidByName} a plătit · împărțit în {exp.splitCount || members.length} · {((exp.amount || 0) / (exp.splitCount || members.length)).toFixed(2)} € de persoană
+                  {exp.paidByName} a plătit · împărțit în {exp.splitCount || members.length} · {((exp.amount || 0) / (exp.splitCount || members.length)).toFixed(2)} {exp.currency || currency} de persoană
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ font: '800 17px/1 Archivo, sans-serif', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>{Number(exp.amount).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} €</div>
+                <div style={{ font: '800 17px/1 Archivo, sans-serif', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>{Number(exp.amount).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {exp.currency || currency}</div>
                 {date && <div style={{ font: '400 11px/1 Archivo, sans-serif', color: 'var(--text-faint)', marginTop: 3 }}>{new Date(date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}</div>}
               </div>
               {canEdit && (
@@ -1425,7 +1425,7 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
                       <b>{isMe ? 'tu' : d.fromName}</b> → <b>{isMeRecv ? 'tu' : d.toName}</b>
                     </div>
                     <div style={{ font: '800 14px/1 Archivo, sans-serif', fontVariantNumeric: 'tabular-nums', color: 'var(--ink)', marginRight: 6 }}>
-                      {Number(d.amount).toFixed(2)} €
+                      {Number(d.amount).toFixed(2)} {d.currency || currency}
                     </div>
                     {isMe && (
                       <button className="btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setActiveSettle(isExpanded ? null : `${d.fromUserId}-${d.toUserId}`)}>
@@ -1445,7 +1445,7 @@ function Expenses({ tripId, members, currentUserId, isAdmin, currency = 'EUR' })
                       </div>
                       {d.toPaymentLink && (
                         <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }} onClick={() => window.open(d.toPaymentLink, '_blank', 'noopener,noreferrer')}>
-                          Deschide {d.toPaymentLink.includes('revolut') ? 'Revolut' : 'link'} · {Number(d.amount).toFixed(2)} €
+                          Deschide {d.toPaymentLink.includes('revolut') ? 'Revolut' : 'link'} · {Number(d.amount).toFixed(2)} {d.currency || currency}
                         </button>
                       )}
                       <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { openSettleModal(d); setActiveSettle(null) }}>
@@ -1653,7 +1653,7 @@ function ProposalForm({ tripId, onClose }) {
 const PROPOSAL_CAT_LABELS = ['Obiectiv', 'Mâncare', 'Cazare', 'Drum', 'Distracție', 'Transport']
 const ACTIVITY_CAT_ORDER = ['sight', 'food', 'stay', 'travel', 'fun', 'transit']
 
-function Chat({ tripId, currentUserId, members }) {
+function Chat({ tripId, currentUserId, members, currency = 'EUR' }) {
   const dispatch = useDispatch()
   const { token } = useSelector((s) => s.auth)
   const { messages, status } = useSelector((s) => s.chat)
@@ -1774,7 +1774,7 @@ function Chat({ tripId, currentUserId, members }) {
                     </span>
                   </div>
                   <div style={{ font: '800 15px/1.2 Archivo, sans-serif', color: 'var(--ink)', marginBottom: 4 }}>{item.title}</div>
-                  {item.location && <div style={{ font: '400 12px/1 Archivo, sans-serif', color: 'var(--text-muted)', marginBottom: 6 }}>📍 {item.location}{item.cost ? ` · ${item.cost} €/pers` : ''}</div>}
+                  {item.location && <div style={{ font: '400 12px/1 Archivo, sans-serif', color: 'var(--text-muted)', marginBottom: 6 }}>📍 {item.location}{item.cost ? ` · ${item.cost} ${currency}/pers` : ''}</div>}
                   {/* Progress */}
                   <div style={{ height: 6, borderRadius: 99, background: 'rgba(31,111,235,.1)', overflow: 'hidden', marginBottom: 6 }}>
                     <div style={{ height: '100%', width: `${pct}%`, background: 'var(--blue-500)', borderRadius: 99, transition: 'width .3s' }} />
@@ -3113,6 +3113,10 @@ function AiChat({ tripId, destination, members, startDate, endDate, budget, curr
 function Recap({ trip, expenses, activities }) {
   const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0)
   const perPerson = trip.members?.length > 0 ? totalSpent / trip.members.length : 0
+  // Expenses can be in different currencies and nothing converts between them,
+  // so these totals are only labelled with the trip's own currency — mixing
+  // several would need conversion rates this app does not have.
+  const cur = trip.currency || 'EUR'
 
   const catTotals = {}
   expenses.forEach(e => {
@@ -3148,9 +3152,9 @@ function Recap({ trip, expenses, activities }) {
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', borderBottom: '2px solid var(--border-strong)' }}>
         {[
-          { label: 'Total', value: `${totalSpent.toLocaleString('ro-RO', { minimumFractionDigits: 0 })} €`, color: 'var(--ink)' },
-          { label: 'Pe persoană', value: `${Math.round(perPerson).toLocaleString('ro-RO')} €`, color: 'var(--ink)' },
-          { label: 'Sub buget cu', value: '— €', color: 'var(--teal-500)' },
+          { label: 'Total', value: `${totalSpent.toLocaleString('ro-RO', { minimumFractionDigits: 0 })} ${cur}`, color: 'var(--ink)' },
+          { label: 'Pe persoană', value: `${Math.round(perPerson).toLocaleString('ro-RO')} ${cur}`, color: 'var(--ink)' },
+          { label: 'Sub buget cu', value: `— ${cur}`, color: 'var(--teal-500)' },
           { label: 'Activități', value: String(activities.length || 0), color: 'var(--ink)' },
         ].map((s, i) => (
           <div key={s.label} style={{ padding: '20px 24px', borderRight: i < 3 ? '1px solid var(--border)' : 'none' }}>
@@ -3178,7 +3182,7 @@ function Recap({ trip, expenses, activities }) {
                     <div style={{ flex: 1, height: 28, background: 'var(--bg)', borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
                       <div style={{ width: `${pct}%`, height: '100%', background: CAT_COLORS[cat] || '#9ca3af', borderRadius: 'var(--r-sm)', transition: 'width .4s' }} />
                     </div>
-                    <div style={{ font: '800 13px/1 Archivo, sans-serif', color: 'var(--ink)', fontVariantNumeric: 'tabular-nums', width: 60, flexShrink: 0 }}>{amount.toFixed(0)} €</div>
+                    <div style={{ font: '800 13px/1 Archivo, sans-serif', color: 'var(--ink)', fontVariantNumeric: 'tabular-nums', width: 68, flexShrink: 0 }}>{amount.toFixed(0)} {cur}</div>
                   </div>
                 )
               })}
@@ -3332,7 +3336,7 @@ function TripDetail() {
           {tab === 'members' && (
             <Members members={trip.members} currentUserEmail={user?.email} isAdmin={isAdmin} tripId={trip.id} />
           )}
-          {tab === 'chat' && <Chat tripId={trip.id} currentUserId={currentUserId} members={trip.members} />}
+          {tab === 'chat' && <Chat tripId={trip.id} currentUserId={currentUserId} members={trip.members} currency={trip.currency} />}
           {tab === 'ai' && <AiChat tripId={trip.id} destination={trip.destination} members={trip.members} startDate={trip.startDate} endDate={trip.endDate} budget={trip.budget} currency={trip.currency} expenses={expenses} initialPrompt={initialPrompt} />}
           {tab === 'recap' && <Recap trip={trip} expenses={expenses} activities={activities} />}
         </div>
