@@ -70,12 +70,12 @@ export const updateExpense = createAsyncThunk(
 
 export const createSettlement = createAsyncThunk(
   'expenses/createSettlement',
-  async ({ tripId, fromUserId, toUserId, amount, method }, { getState, rejectWithValue }) => {
+  async ({ tripId, fromUserId, toUserId, amount, method, currency }, { getState, rejectWithValue }) => {
     try {
       const token = getState().auth.token
       const result = await apiRequest(`/trips/${tripId}/settlements`, {
         method: 'POST',
-        body: { fromUserId, toUserId, amount, method },
+        body: { fromUserId, toUserId, amount, method, currency },
         token,
       })
       // For card payments, result contains a checkoutUrl — don't fetch balances yet
@@ -90,12 +90,12 @@ export const createSettlement = createAsyncThunk(
 
 export const settleDebt = createAsyncThunk(
   'expenses/settleDebt',
-  async ({ tripId, fromUserId, toUserId }, { getState, rejectWithValue }) => {
+  async ({ tripId, fromUserId, toUserId, currency }, { getState, rejectWithValue }) => {
     try {
       const token = getState().auth.token
       await apiRequest(`/trips/${tripId}/expenses/settle`, {
         method: 'POST',
-        body: { fromUserId, toUserId },
+        body: { fromUserId, toUserId, currency },
         token,
       })
       const [expenses, balances] = await Promise.all([
